@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
 from .models import CustomUser
+from .services import create_verification_code, send_verification_code
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -33,4 +34,6 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password_confirm')
         user = CustomUser.objects.create_user(**validated_data)
+        code = create_verification_code(user)
+        send_verification_code(user.email, code)
         return user
