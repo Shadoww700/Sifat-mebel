@@ -1,8 +1,10 @@
 from rest_framework import serializers
 from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
-from .models import CustomUser
+from .models import CustomUser, EmailVerificationCode, VerificationPurpose
 from .services import create_verification_code, send_verification_code
+from django.utils import timezone
+from django.contrib.auth.hashers import check_password
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -36,4 +38,54 @@ class RegisterSerializer(serializers.ModelSerializer):
         user = CustomUser.objects.create_user(**validated_data)
         code = create_verification_code(user)
         send_verification_code(user.email, code)
+        return user
+
+
+class VerifyEmailSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.CharField(max_length=6)
+    def validate(self, attrs):
+        user = CustomUser.objects.filter(email=attrs.get('email')).first()
+        if not user:
+            raise serializers.ValidationError({
+                'error':'Not such user'
+            })
+        verify_code = EmailVerificationCode.objects.filter(
+            user=user, 
+            purpose=VerificationPurpose.EMAIL_VERIFY,
+            is_used=False
+            ).order_by('-created_at').first()
+        if not verify_code:
+            raise serializers.ValidationError({
+                'error':'Not such code'
+            })
+        if verify_code.attempts >= 5:
+            raise serializers.ValidationError({
+                'error':'More than 5 time, send code again'
+            })
+        if verify_code.expires_at < timezone.now():
+            raise serializers.ValidationError({
+                'error':"Code expired ! (Code's time Ended!)"
+            })
+        if not check_password(attrs.get('code'), verify_code.code_hash):
+            verify_code.attempts += 1
+            verify_code.save(update_fields=['attempts'])
+            raise serializers.ValidationError({
+                'error':'Wrong verification code'
+            })
+        attrs['user'] = user
+        attrs['verify_code'] = verify_code
+
+        return attrs
+
+    def create(self, validated_data):
+        user = validated_data['user']
+        verify_code = validated_data['verify_code']
+
+        user.is_email_verified = True
+        user.save(update_fields=['is_email_verified'])
+
+        verify_code.is_used = True
+        verify_code.save(update_fields=['is_used'])
+
         return user
