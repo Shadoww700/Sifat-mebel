@@ -36,3 +36,5 @@ frontend/out/
 .mypy_cache/
 .coverage
 htmlcov/
+
+xx.txt
