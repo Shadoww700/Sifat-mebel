@@ -12,6 +12,12 @@ def generate_verification_code():
 
 
 def create_verification_code(user):
+    EmailVerificationCode.objects.filter(
+        user=user,
+        purpose=VerificationPurpose.EMAIL_VERIFY,
+        is_used=False
+    ).update(is_used=True)
+    
     code = generate_verification_code()
     code_hash = make_password(code)
     expires_at = timezone.now() + timedelta(minutes=10)

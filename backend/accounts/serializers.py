@@ -89,3 +89,26 @@ class VerifyEmailSerializer(serializers.Serializer):
         verify_code.save(update_fields=['is_used'])
 
         return user
+
+
+class ResendVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate(self, attrs):
+        user = CustomUser.objects.filter(email=attrs.get('email')).first()
+        if not user:
+            raise serializers.ValidationError({
+                'error': 'No such user'
+            })
+        if user.is_email_verified:
+            raise serializers.ValidationError({
+                'message':"You've verified, just login"
+            })
+        attrs['user'] = user 
+        return attrs
+
+    def create(self, validated_data):
+        user = validated_data['user']
+        code = create_verification_code(user)
+        send_verification_code(user.email, code)
+        return user

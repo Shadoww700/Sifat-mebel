@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny
 from .serializers import (
     RegisterSerializer,
     VerifyEmailSerializer,
-
+    ResendVerificationSerializer
 )
 
 class RegisterAPIView(generics.CreateAPIView):
@@ -24,5 +24,20 @@ class VerifyEmailAPIView(generics.GenericAPIView):
 
         return Response(
             {'message': 'Email verified successfully'},
+            status=status.HTTP_200_OK
+        )
+
+
+class ResendVerificationAPIView(generics.GenericAPIView):
+    serializer_class = ResendVerificationSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            {'message':'Verification code send successfully'},
             status=status.HTTP_200_OK
         )
