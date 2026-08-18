@@ -5,6 +5,8 @@ from .models import CustomUser, EmailVerificationCode, VerificationPurpose
 from .services import create_verification_code, send_verification_code
 from django.utils import timezone
 from django.contrib.auth.hashers import check_password
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -112,3 +114,36 @@ class ResendVerificationSerializer(serializers.Serializer):
         code = create_verification_code(user)
         send_verification_code(user.email, code)
         return user
+
+
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        user = authenticate(
+            email=attrs.get('email'),
+            password=attrs.get('password')
+        )
+        if not user:
+            raise serializers.ValidationError(
+                {'message':'Wrong password or username'}
+            )
+        if not user.is_email_verified:
+            raise serializers.ValidationError(
+                {'message':'Verify first'}
+            )
+        refresh = RefreshToken.for_user(user)
+        access = refresh.access_token
+        return {
+            'refresh': str(refresh),
+            'access': str(access),
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'role': user.role
+            }
+        }
