@@ -11,7 +11,9 @@ from .serializers import (
     VerifyEmailSerializer,
     ResendVerificationSerializer,
     LoginSerializer,
-    LogoutSerializer
+    LogoutSerializer,
+    PasswordForgotSerializer,
+    PasswordResetSerializer
 
 )
 
@@ -92,3 +94,31 @@ class LogoutAllAPIView(generics.GenericAPIView):
             {'message':'Logged out from all devices'},
             status=status.HTTP_200_OK
         )
+
+
+class PasswordForgotAPIView(generics.GenericAPIView):
+    serializer_class = PasswordForgotSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response({
+            'message':'If account exists, reset code has been sent.'
+        }, status=status.HTTP_200_OK)
+
+
+class PasswordResetAPIView(generics.GenericAPIView):
+    serializer_class = PasswordResetSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response({
+            'message':'Passowrd reset Successfully'
+        }, status=status.HTTP_200_OK)

@@ -2,12 +2,16 @@ from rest_framework import serializers
 from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
 from .models import CustomUser, EmailVerificationCode, VerificationPurpose
-from .services import create_verification_code, send_verification_code
+from .services import create_verification_code, send_verification_code, send_reset_password_code
 from django.utils import timezone
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.token_blacklist.models import (
+    OutstandingToken,
+    BlacklistedToken,
+)
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -112,7 +116,7 @@ class ResendVerificationSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         user = validated_data['user']
-        code = create_verification_code(user)
+        code = create_verification_code(user, VerificationPurpose.EMAIL_VERIFY)
         send_verification_code(user.email, code)
         return user
 
@@ -161,3 +165,105 @@ class LogoutSerializer(serializers.Serializer):
                 {'message':'Invalid or expiredd refresh token'}
             )
         return attrs
+
+
+class PasswordForgotSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate(self, attrs):
+        user = CustomUser.objects.filter(
+            email=attrs.get('email'),
+            is_active=True
+            ).first()
+
+        attrs['user'] = user
+        return attrs
+
+    def create(self, validated_data):
+        user = validated_data['user']
+        if user:
+            code = create_verification_code(user, VerificationPurpose.PASSWORD_RESET)
+            send_reset_password_code(user.email, code)
+        return validated_data
+
+
+class PasswordResetSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.CharField()
+    new_password = serializers.CharField()
+    new_password_confirm = serializers.CharField()
+
+    def validate(self, attrs):
+        if attrs.get('new_password') != attrs.get('new_password_confirm'):
+            raise serializers.ValidationError({
+                'message':"Passwords don't match" 
+            })
+        
+        user = CustomUser.objects.filter(
+            email=attrs.get('email'),
+            is_active=True
+        ).first()
+
+        if not user:
+            raise serializers.ValidationError({
+                'message':'Invalid reset request'
+            })
+        try:
+            validate_password(attrs.get('new_password'), user=user)
+        except ValidationError as e:
+            raise serializers.ValidationError({
+                'passwords': e.messages
+            })
+        
+        verify_code = EmailVerificationCode.objects.filter(
+            user=user,
+            purpose=VerificationPurpose.PASSWORD_RESET,
+            is_used=False
+        ).order_by('-created_at').first()
+
+        if not verify_code:
+            raise serializers.ValidationError({
+                'error':'Not any verify code'
+            })
+        if verify_code.attempts >= 5:
+            raise serializers.ValidationError({
+                'error':'Too many attempts, Request a new code'
+            })
+        if verify_code.expires_at < timezone.now():
+            raise serializers.ValidationError({
+                'error':"Code has been expired"
+            })
+        if not check_password(
+            attrs.get('code'), 
+            verify_code.code_hash
+        ):
+            verify_code.attempts += 1
+            verify_code.save(update_fields=['attempts'])
+
+            raise serializers.ValidationError({
+                'error':'Wrong verification code'
+            })
+
+        attrs['user'] = user
+        attrs['verify_code'] = verify_code
+
+        return attrs
+
+    def create(self, validated_data):
+        user = validated_data['user']
+        verify_code = validated_data['verify_code']
+        new_password = validated_data['new_password']
+
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+        tokens = OutstandingToken.objects.filter(
+            user=user,
+            expires_at__gt=timezone.now()
+        )
+        for token in tokens:
+            BlacklistedToken.objects.get_or_create(token=token)
+
+        verify_code.is_used = True
+        verify_code.save(update_fields=['is_used'])
+
+        return user
