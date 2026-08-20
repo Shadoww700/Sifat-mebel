@@ -12,4 +12,5 @@ urlpatterns = [
     path('logout-all/', views.LogoutAllAPIView.as_view()),
     path('password/forgot/', views.PasswordForgotAPIView.as_view()),
     path('password/reset/', views.PasswordResetAPIView.as_view()),
+    path('change/password/', views.PasswordChangeAPIView.as_view()),
 ]

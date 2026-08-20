@@ -267,3 +267,50 @@ class PasswordResetSerializer(serializers.Serializer):
         verify_code.save(update_fields=['is_used'])
 
         return user
+
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.EmailField(write_only=True)
+    new_password = serializers.CharField(write_only=True)
+    new_password_confirm = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+
+        if not user.check_password(attrs.get('current_password')):
+            raise serializers.ValidationError({
+                'error':'Current password is incorrect'
+            })
+        if attrs.get('new_password') != attrs.get('new_password_confirm'):
+            raise serializers.ValidationError({
+                'error':'Passwords do not match'
+            })
+        try:
+            validate_password(
+                attrs.get('new_password'),
+                user=user
+            )
+        except ValidationError as e:
+            raise serializers.ValidationError({
+                'new_password': e.messages
+            })
+
+        attrs['user'] = user
+        return attrs
+
+    def create(self, validated_data):
+        user = validated_data['user']
+        new_password = validated_data['new_password']
+
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+
+        tokens = OutstandingToken.objects.filter(
+            user=user,
+            expires_at__gt=timezone.now()
+        )
+        for token in tokens:
+            BlacklistedToken.objects.get_or_create(token=token)
+            
+        return user

@@ -13,7 +13,8 @@ from .serializers import (
     LoginSerializer,
     LogoutSerializer,
     PasswordForgotSerializer,
-    PasswordResetSerializer
+    PasswordResetSerializer,
+    ChangePasswordSerializer
 
 )
 
@@ -121,4 +122,18 @@ class PasswordResetAPIView(generics.GenericAPIView):
 
         return Response({
             'message':'Passowrd reset Successfully'
+        }, status=status.HTTP_200_OK)
+
+
+class PasswordChangeAPIView(generics.GenericAPIView):
+    serializer_class = ChangePasswordSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response({
+            'message':'Password changed successfully'
         }, status=status.HTTP_200_OK)
