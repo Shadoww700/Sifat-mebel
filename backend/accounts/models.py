@@ -59,3 +59,22 @@ class EmailVerificationCode(models.Model):
 
     def __str__(self):
         return f'{self.user.email} - {self.purpose}'
+
+
+class Profile(models.Model):
+    user = models.OneToOneField(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='profile'
+    )
+    avatar = models.ImageField(
+        upload_to='profiles/',
+        blank=True,
+        null=True
+    )
+    birth_date = models.DateField(blank=True, null=True)
+    create_at = models.DateField(auto_now_add=True)
+    updated_at = models.DateField(auto_now=True)
+
+    def __str__(self):
+        return self.user.email

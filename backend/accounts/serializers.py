@@ -314,3 +314,22 @@ class ChangePasswordSerializer(serializers.Serializer):
             BlacklistedToken.objects.get_or_create(token=token)
             
         return user
+
+
+class MeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fileds = [
+            'id',
+            'email',
+            'phone_number',
+            'first_name',
+            'last_name',
+            'role',
+            'is_email_verified',
+            'date_joined',
+            'last_login',
+            'created_at',
+            'updated_at',
+        ]
+        
