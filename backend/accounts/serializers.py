@@ -1,7 +1,12 @@
 from rest_framework import serializers
 from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
-from .models import CustomUser, EmailVerificationCode, VerificationPurpose
+from .models import (
+    CustomUser,
+    EmailVerificationCode, 
+    VerificationPurpose,
+    Profile
+    )
 from .services import create_verification_code, send_verification_code, send_reset_password_code
 from django.utils import timezone
 from django.contrib.auth.hashers import check_password
@@ -332,4 +337,46 @@ class MeSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
-        
+
+
+class ProfileSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(
+        source='user.email',
+        read_only=True
+    )
+    first_name = serializers.CharField(
+        source='user.first_name',
+        required=False
+    )
+    last_name = serializers.CharField(
+            source='user.last_name',
+            required=False
+        )
+    phone_number = serializers.CharField(
+        source='user.phone_number',
+        required=False
+    )
+
+    class Meta:
+        model = Profile
+        fields = [
+            'email',
+            'first_name',
+            'last_name',
+            'phone_number',
+            'avatar',
+            'birth_date',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['created_at', 'updated_anew_passwordt']
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop('user', {})
+        user = instance.user
+
+        for field, value in user_data.items():
+            setattr(user, field, value)
+
+        user.save()
+        return super().update(instance, validated_data) 

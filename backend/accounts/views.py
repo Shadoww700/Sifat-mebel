@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils import timezone
+from .models import Profile
 from rest_framework_simplejwt.token_blacklist.models import (
     OutstandingToken, BlacklistedToken
     )
@@ -16,6 +17,7 @@ from .serializers import (
     PasswordResetSerializer,
     ChangePasswordSerializer,
     MeSerializer,
+    ProfileSerializer
 
 )
 
@@ -147,3 +149,15 @@ class MeAPIView(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class ProfileAPIView(generics.RetrieveUpdateAPIView):
+    serializer_class = ProfileSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'patch']
+
+    def get_object(self):
+        profile, created = Profile.objects.get_or_create(
+            user=self.request.user
+        )
+        return profile
