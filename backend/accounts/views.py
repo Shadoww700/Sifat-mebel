@@ -4,6 +4,7 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils import timezone
 from .models import Profile
+from . import models
 from rest_framework_simplejwt.token_blacklist.models import (
     OutstandingToken, BlacklistedToken
     )
@@ -17,7 +18,8 @@ from .serializers import (
     PasswordResetSerializer,
     ChangePasswordSerializer,
     MeSerializer,
-    ProfileSerializer
+    ProfileSerializer,
+    AddressSerializer
 
 )
 
@@ -161,3 +163,13 @@ class ProfileAPIView(generics.RetrieveUpdateAPIView):
             user=self.request.user
         )
         return profile
+
+
+class AddressAPIView(generics.ListCreateAPIView):
+    serializer_class = AddressSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return models.Address.objects.filter(
+            user=self.request.user
+        )

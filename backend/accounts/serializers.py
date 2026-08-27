@@ -5,7 +5,7 @@ from .models import (
     CustomUser,
     EmailVerificationCode, 
     VerificationPurpose,
-    Profile
+    Profile, Address
     )
 from .services import create_verification_code, send_verification_code, send_reset_password_code
 from django.utils import timezone
@@ -380,3 +380,20 @@ class ProfileSerializer(serializers.ModelSerializer):
 
         user.save()
         return super().update(instance, validated_data) 
+
+
+class AddressSerializer(serializers.ModelSerializer):
+    user = serializers.HiddenField(
+        default=serializers.CurrentUserDefault()
+    )
+    class Meta:
+        model = Address
+        fields = [
+            'id', 'user' 'title', 'recipient_name', 
+            'phone_number', 'country', 'region',
+            'city', 'district', 'street', 'house',
+            'apartment', 'landmark', 'postal_code',
+            'latitude', 'longitude', 'is_default',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
