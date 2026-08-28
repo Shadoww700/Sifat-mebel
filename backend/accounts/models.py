@@ -74,7 +74,7 @@ class Profile(models.Model):
         null=True
     )
     birth_date = models.DateField(blank=True, null=True)
-    create_at = models.DateField(auto_now_add=True)
+    created_at = models.DateField(auto_now_add=True)
     updated_at = models.DateField(auto_now=True)
 
     def __str__(self):

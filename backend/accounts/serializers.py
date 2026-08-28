@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
+from django.db import transaction
 from .models import (
     CustomUser,
     EmailVerificationCode, 
@@ -324,7 +325,7 @@ class ChangePasswordSerializer(serializers.Serializer):
 class MeSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
-        fileds = [
+        fields = [
             'id',
             'email',
             'phone_number',
@@ -389,7 +390,7 @@ class AddressSerializer(serializers.ModelSerializer):
     class Meta:
         model = Address
         fields = [
-            'id', 'user' 'title', 'recipient_name', 
+            'id', 'user', 'title', 'recipient_name', 
             'phone_number', 'country', 'region',
             'city', 'district', 'street', 'house',
             'apartment', 'landmark', 'postal_code',
@@ -397,3 +398,34 @@ class AddressSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        user = validated_data['user']
+        with transaction.atomic():
+            user.__class__.objects.select_for_update().get(
+                pk=user.pk
+            )
+
+            if validated_data.get('is_default'):
+                Address.objects.filter(
+                    user=validated_data['user'],
+                    is_default=True
+                    ).update(is_default=False)
+
+            return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        user = instance.user
+        with transaction.atomic():
+            user.__class__.objects.select_for_update().get(
+                pk=user.pk
+            )
+            if validated_data.get('is_default') is True:
+                Address.objects.filter(
+                    user=user,
+                    is_default=True
+                ).exclude(
+                    pk=instance.pk
+                ).update(is_default=False)
+
+            return super().update(instance, validated_data)

@@ -173,3 +173,14 @@ class AddressAPIView(generics.ListCreateAPIView):
         return models.Address.objects.filter(
             user=self.request.user
         )
+
+
+class AddressDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = AddressSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ['patch', 'delete']
+
+    def get_queryset(self):
+        return models.Address.objects.filter(
+            user=self.request.user
+        )
