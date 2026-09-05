@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'accounts.apps.AccountsConfig',
     'rest_framework_simplejwt.token_blacklist',
+    'catalog',
 ]
 
 MIDDLEWARE = [
@@ -131,3 +132,6 @@ EMAIL_USE_TLS = config("EMAIL_USE_TLS", cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = f"Sifat-Mebe' <{EMAIL_HOST_USER}>"
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
