@@ -1,3 +1,5 @@
+from django.core.validators import MinValueValidator
+from decimal import Decimal
 from django.db import models
 from .managers import (
     CategoryManager,
@@ -59,3 +61,80 @@ class ProductType(models.Model):
         ]
     def __str__(self):
         return self.name
+
+
+class ProductStatus(models.TextChoices):
+    DRAFT = 'DRAFT', 'DRAFT'
+    ACTIVE = 'ACTIVE', 'ACTIVE'
+    OUT_OF_STOCK = 'OUT_OF_STOCK', 'OUT_OF_STOCK'
+    ARCHIVED = 'ARCHIVED', 'ARCHIVED'
+
+class Currency(models.TextChoices):
+    TJS = 'TJS', 'TJS'
+    USD = 'USD', 'USD'
+
+class Product(models.Model):
+    product_type = models.ForeignKey(
+        ProductType,
+        on_delete=models.PROTECT,
+        related_name='products'
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name='products'
+    )
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(unique=True)
+    short_description = models.CharField(max_length=150)
+    description = models.TextField()
+    sku = models.CharField(max_length=255, unique=True)
+    base_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.00'))]
+        )
+    discount_price = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))]
+        )
+    currency = models.CharField(
+        max_length=3,
+        choices=Currency.choices,
+        default=Currency.TJS
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ProductStatus.choices,
+        default=ProductStatus.DRAFT
+        )
+    is_active = models.BooleanField(default=True)
+    is_featured = models.BooleanField(default=False)
+    warranty = models.CharField(max_length=100, blank=True)
+    country_of_origin = models.CharField(max_length=100, blank=True)
+    views_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(base_price__gte=0) &
+                    (models.Q(discount_price__isnull=True)|(models.Q(discount_price__gte=0)&
+                    models.Q(discount_price__lte=models.F("base_price"))))
+                ), name='product_valid_prices')]
+
+    def archive(self):
+        self.is_active = False
+        self.status=ProductStatus.ARCHIVED
+        self.save(update_fields=['is_active', 'status'])
+
+    def __str__(self):
+        return self.name
+
+

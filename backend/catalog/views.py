@@ -5,26 +5,18 @@ from .permissions import (
 )
 
 
-from .models import (
-    Category,
-    Brand,
-    ProductType,
+from . import models
+    
+from . import serializers
 
-    )
-from .serializers import (
-    CategorySerializer,
-    BrandSerializer,
-    ProductTypeSerializer,
-
-)
 
 class CategoryListCreateAPIView(generics.ListCreateAPIView):
-    serializer_class = CategorySerializer
+    serializer_class = serializers.CategorySerializer
 
     def get_queryset(self):
         if self.request.method == 'GET':
-            return Category.objects.active().ordered()
-        return Category.objects.ordered()
+            return models.Category.objects.active().ordered()
+        return models.Category.objects.ordered()
 
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -33,43 +25,43 @@ class CategoryListCreateAPIView(generics.ListCreateAPIView):
 
 
 class CategoryDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = CategorySerializer
+    serializer_class = serializers.CategorySerializer
     permission_classes = [IsAdminOrReadonly]
 
     def get_queryset(self):
         if self.request.method == 'GET':
-            return Category.objects.active()
-        return Category.objects.all()
+            return models.Category.objects.active()
+        return models.Category.objects.all()
 
 
 class BrandListCreateAPIView(generics.ListCreateAPIView):
-    serializer_class = BrandSerializer
+    serializer_class = serializers.BrandSerializer
     permission_classes = [IsAdminOrReadonly]
 
     def get_queryset(self):
         if self.request.user.is_staff:
-            return Brand.objects.all().order_by('id')
-        return Brand.objects.filter(
+            return models.Brand.objects.all().order_by('id')
+        return models.Brand.objects.filter(
             is_active=True
         ).order_by('id')
 
 
 class BrandDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = BrandSerializer
+    serializer_class = serializers.BrandSerializer
     permission_classes = [IsAdminOrReadonly]
 
     def get_queryset(self):
         if self.request.user.is_staff:
-            return Brand.objects.all()
-        return Brand.objects.filter(is_active=True)
+            return models.Brand.objects.all()
+        return models.Brand.objects.filter(is_active=True)
 
 
 class ProductTypeListCreateAPIView(generics.ListCreateAPIView):
-    serializer_class = ProductTypeSerializer
+    serializer_class = serializers.ProductTypeSerializer
     permission_classes = [IsAdminOrReadonly]
 
     def get_queryset(self):
-        qs = ProductType.objects.select_related('category')
+        qs = models.ProductType.objects.select_related('category')
         if self.request.user.is_staff:
             return qs   
                 
@@ -77,12 +69,52 @@ class ProductTypeListCreateAPIView(generics.ListCreateAPIView):
 
 
 class ProductTypeDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = ProductTypeSerializer
+    serializer_class = serializers.ProductTypeSerializer
     permission_classes = [IsAdminOrReadonly]
 
     def get_queryset(self):
-        qs = ProductType.objects.select_related('category')
+        qs = models.ProductType.objects.select_related('category')
         if self.request.user.is_staff:
             return qs   
         
         return qs.filter(is_active=True)
+
+
+class ProductListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = serializers.ProductSerializer
+    permission_classes = [IsAdminOrReadonly]
+
+    def get_queryset(self):
+        qs = models.Product.objects.select_related('brand', 'product_type__category')
+        
+        if self.request.user.is_staff:
+            return qs
+        
+        return qs.filter(
+            is_active=True, 
+            status__in=[
+                models.ProductStatus.ACTIVE,
+                models.ProductStatus.OUT_OF_STOCK
+                            ])
+
+
+class ProductDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = serializers.ProductSerializer
+    permission_classes = [IsAdminOrReadonly]
+
+    def get_queryset(self):
+        qs = models.Product.objects.select_related(
+            'brand',
+            'product_type__category')
+        if self.request.user.is_staff:
+            return qs
+        
+        return qs.filter(
+            is_active=True,
+            status__in=[
+                models.ProductStatus.ACTIVE,
+                models.ProductStatus.OUT_OF_STOCK
+            ])
+
+    def perform_destroy(self, instance):
+        instance.archive()
