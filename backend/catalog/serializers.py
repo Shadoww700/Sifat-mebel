@@ -1,5 +1,5 @@
 from rest_framework import serializers
-
+from django.utils import timezone
 from . import models
    
 
@@ -105,7 +105,13 @@ class ProductSerializer(serializers.ModelSerializer):
             'updated_at',
             'published_at'
         ]
-        read_only_fields = ['id', 'views_count', 'created_at', 'updated_at']
+        read_only_fields = [
+            'id', 
+            'views_count',
+            'published_at', 
+            'created_at', 
+            'updated_at'
+            ]
 
     def validate(self, attrs):
         base_price = attrs.get(
@@ -126,4 +132,72 @@ class ProductSerializer(serializers.ModelSerializer):
                 'discount_price':'Discount price cannot be greater than base price.'
             })
 
+    def create(self, validated_data):
+        if validated_data.get('status') == models.ProductStatus.ACTIVE:
+            validated_data['published_at'] = timezone.now()
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        new_status = validated_data.get(
+            'status', instance.status
+        )
+        if (
+            instance.status != models.ProductStatus.ACTIVE
+            and new_status == models.ProductStatus.ACTIVE
+            and instance.published_at is None
+        ):
+            validated_data['published_at'] = timezone.now()
+
+        return super().update(instance, validated_data)
+
+
+
+class ProductMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Product
+        fields = [
+            "id",
+            "name",
+            "slug",
+        ]
+
+
+
+class ProductImageSerializer(serializers.ModelSerializer):
+    product_info = ProductMiniSerializer(
+        source="product",
+        read_only=True
+    )
+    class Meta:
+        model = models.ProductImage
+        fields = [
+            'id',
+            'product',
+            'product_info',
+            'image',
+            'alt_text',
+            'is_primary',
+            'sort_order',
+            'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']
+
+    def create(self, validated_data):
+        if validated_data['is_primary'] is True:
+            models.ProductImage.objects.filter(
+                product=validated_data.get('product'),
+                is_primary=True
+            ).update(is_primary=False)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if validated_data['is_primary'] is True:
+            product = validated_data.get('product', instance.product)
+            models.ProductImage.objects.filter(
+                product=product,
+                is_primary=True
+            ).exclude(
+                pk=instance.pk
+            ).update(is_primary=False)
+        return super().update(instance, validated_data)
 

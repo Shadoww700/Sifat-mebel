@@ -10,6 +10,8 @@ urlpatterns = [
     path('product-types/', views.ProductTypeListCreateAPIView.as_view()),
     path('product-types/<int:pk>/', views.ProductTypeDetailAPIView.as_view()),
     path('products/', views.ProductListCreateAPIView.as_view()),
-    path('product/<int:pk>/', views.ProductDetailAPIView.as_view())
+    path('product/<int:pk>/', views.ProductDetailAPIView.as_view()),
+    path('product-image', views.ProductImageListCreateAPIView.as_view()),
+    path('product-image/<int:pk>/', views.ProductImageDetailAPIView.as_view()),
 
 ]

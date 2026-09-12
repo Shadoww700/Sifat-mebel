@@ -118,3 +118,37 @@ class ProductDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
 
     def perform_destroy(self, instance):
         instance.archive()
+
+
+
+class ProductImageListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = serializers.ProductImageSerializer
+    permission_classes = [IsAdminOrReadonly]
+
+    def get_queryset(self):
+        qs = models.ProductImage.objects.select_related('product')
+        if self.request.user.is_staff:
+            return qs
+        return qs.filter(
+            product__is_active=True,
+            product__status__in=[
+                models.ProductStatus.ACTIVE,
+                models.ProductStatus.OUT_OF_STOCK
+            ])
+
+
+class ProductImageDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = serializers.ProductImageSerializer
+    permission_classes = [IsAdminOrReadonly]
+
+    def get_queryset(self):
+        qs = models.ProductImage.objects.select_related('product')
+        if self.request.user.is_staff:
+            return qs
+        return qs.filter(
+            product__is_active=True,
+            product__status__in=[
+                models.ProductStatus.ACTIVE,
+                models.ProductStatus.OUT_OF_STOCK
+            ])
+    
