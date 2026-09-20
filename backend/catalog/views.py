@@ -145,10 +145,92 @@ class ProductImageDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         qs = models.ProductImage.objects.select_related('product')
         if self.request.user.is_staff:
             return qs
+        
         return qs.filter(
             product__is_active=True,
             product__status__in=[
                 models.ProductStatus.ACTIVE,
                 models.ProductStatus.OUT_OF_STOCK
             ])
+
+
+class AttributeListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = serializers.AttributeSerializer
+    permission_classes = [IsAdminOrReadonly]
+    queryset = models.Attribute.objects.all()
+
+
+class AttributeDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = serializers.AttributeSerializer
+    permission_classes = [IsAdminOrReadonly]
+    queryset = models.Attribute.objects.all()
+
+
+class ProductTypeAttributeListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = serializers.ProductTypeAttributeSerializer
+    permission_classes = [IsAdminOrReadonly]
+
+    def get_queryset(self):
+        qs = models.ProductTypeAttribute.objects.select_related(
+            'product_type__category', 'attribute'
+        ).order_by('sort_order', 'id')
+
+        if self.request.user.is_staff:
+            return qs
+        return qs.filter(
+            product_type__is_active=True
+        )
+
+
+class ProductTypeAttributeDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = serializers.ProductTypeAttributeSerializer
+    permission_classes = [IsAdminOrReadonly]
+
+    def get_queryset(self):
+        qs = models.ProductTypeAttribute.objects.select_related(
+            'product_type__category', 'attribute'
+        ).order_by('sort_order', 'id')
     
+        if self.request.user.is_staff:
+            return qs
+        return qs.filter(
+            product_type__is_active=True
+        )
+
+
+class ProductAttributeValueListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = serializers.ProductAttributeValueSerializer
+    permission_classes = [IsAdminOrReadonly]
+
+    def get_queryset(self):
+        qs = models.ProductAttributeValue.objects.select_related(
+            'product', 'attribute'
+        )
+
+        if self.request.user.is_staff:
+            return qs
+        return qs.filter(
+            product__is_active=True,
+            product__status__in=[
+                models.ProductStatus.ACTIVE,
+                models.ProductStatus.OUT_OF_STOCK
+            ])
+
+
+class ProductAttributeValueDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = serializers.ProductAttributeValueSerializer
+    permission_classes = [IsAdminOrReadonly]
+
+    def get_queryset(self):
+        qs = models.ProductAttributeValue.objects.select_related(
+            'product', 'attribute'
+        )
+
+        if self.request.user.is_staff:
+            return qs
+        return qs.filter(
+            product__is_active=True,
+            product__status__in=[
+                models.ProductStatus.ACTIVE,
+                models.ProductStatus.OUT_OF_STOCK
+            ])

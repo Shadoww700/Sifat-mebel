@@ -160,3 +160,81 @@ class ProductImage(models.Model):
 
     def __str__(self):
         return f'{self.product.name} image'
+
+
+
+class AttributeDataType(models.TextChoices):
+    TEXT = 'TEXT', 'TEXT'
+    NUMBER = 'NUMBER', 'NUMBER'
+    BOOLEAN = 'BOOLEAN', 'BOOLEAN'
+
+
+class Attribute(models.Model):
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(unique=True)
+    data_type = models.CharField(
+        max_length=20, choices=AttributeDataType.choices,
+        default=AttributeDataType.TEXT
+        )
+    unit = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return '{self.name} Attribute'
+
+
+
+class ProductTypeAttribute(models.Model):
+    product_type = models.ForeignKey(
+        ProductType,
+        on_delete=models.PROTECT,
+        related_name='attribute_links'
+    )
+    attribute = models.ForeignKey(
+        Attribute,
+        on_delete=models.PROTECT,
+        related_name='product_type_links'
+    )
+    is_required = models.BooleanField(default=False)
+    is_filterable = models.BooleanField(default=False)
+    sort_order = models.PositiveIntegerField(default=0)
+
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['product_type', 'attribute'],
+                name='unique_attribute_per_product_type'
+            )]
+
+    def __str__(self):
+        return f'{self.product_type} - {self.attribute}'
+
+
+
+class ProductAttributeValue(models.Model):
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="attribute_values"
+    )
+    attribute = models.ForeignKey(
+        Attribute,
+        on_delete=models.PROTECT,
+        related_name="product_values"
+    )
+    value_text = models.CharField(max_length=255, null=True, blank=True)
+    value_number = models.DecimalField(max_digits=12, decimal_places=2, null=True,blank=True)
+    value_boolean = models.BooleanField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "attribute"],
+                name="product_attribute_unique"
+            )]
+
+    def __str__(self):
+        return f"{self.product} - {self.attribute}"
+
+
+

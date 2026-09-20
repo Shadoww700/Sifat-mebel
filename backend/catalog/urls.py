@@ -13,5 +13,10 @@ urlpatterns = [
     path('product/<int:pk>/', views.ProductDetailAPIView.as_view()),
     path('product-image', views.ProductImageListCreateAPIView.as_view()),
     path('product-image/<int:pk>/', views.ProductImageDetailAPIView.as_view()),
-
+    path('attributes/', views.AttributeListCreateAPIView.as_view()),
+    path('attributes/<int:pk>/', views.AttributeDetailAPIView.as_view()),
+    path('product-type-attributes/', views.ProductTypeAttributeListCreateAPIView.as_view()),
+    path('product-type-attributes/<int:pk>/', views.ProductTypeAttributeDetailAPIView.as_view()),
+    path('product-attribute-values/', views.ProductAttributeValueListCreateAPIView.as_view()),
+    path('product-attribute-values/<int:pk>/', views.ProductAttributeValueDetailAPIView.as_view())
 ]
