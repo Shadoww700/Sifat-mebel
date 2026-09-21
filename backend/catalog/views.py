@@ -234,3 +234,32 @@ class ProductAttributeValueDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
                 models.ProductStatus.ACTIVE,
                 models.ProductStatus.OUT_OF_STOCK
             ])
+
+
+class ProductVariantListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = serializers.ProductVariantSerializer
+    permission_classes = [IsAdminOrReadonly]
+
+    def get_queryset(self):
+        qs = models.ProductVariant.objects.select_related('product')
+        if self.request.user.is_staff:
+            return qs
+        
+        return qs.filter(product__is_active=True)
+
+class ProductVariantDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = serializers.ProductVariantSerializer
+    permission_classes = [IsAdminOrReadonly]
+
+    def get_queryset(self):
+        qs = models.ProductVariant.objects.select_related('product')
+        if self.request.user.is_staff:
+            return qs
+            
+        return qs.filter(
+            is_active=True,
+            product__is_active=True,
+            product__status__in=[
+                models.ProductStatus.ACTIVE,
+                models.ProductStatus.OUT_OF_STOCK,
+            ])

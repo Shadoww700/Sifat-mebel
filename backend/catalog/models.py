@@ -238,3 +238,39 @@ class ProductAttributeValue(models.Model):
 
 
 
+class ProductVariant(models.Model):
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='variants'
+    )
+    sku = models.CharField(max_length=255, unique=True)
+    name = models.CharField(max_length=255)
+    price = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.00'))]
+        )
+    discount_price = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))]
+        )
+    stock_quantity = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(price__gte=0),
+                name='variant_price_non_negative'
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(discount_price__isnull=True)|(models.Q(discount_price__gte=0) &
+                    models.Q(discount_price__lte=models.F('price'))
+                    )), name='variant_valid_discount_price')]

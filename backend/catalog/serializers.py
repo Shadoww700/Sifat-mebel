@@ -333,3 +333,46 @@ class ProductAttributeValueSerializer(serializers.ModelSerializer):
                     'BOOLEAN - it must be boolean only (Yes/No)'
                 )
         return attrs
+
+
+class ProductVariantSerializer(serializers.ModelSerializer):
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=models.Product.objects.filter(is_active=True)
+    )
+    product_info = ProductMiniSerializer(source='product', read_only=True)
+    class Meta:
+        model = models.ProductVariant
+        fields = [
+            'id',
+            'product',
+            'product_info',
+            'sku',
+            'name',
+            'price',
+            'discount_price',
+            'stock_quantity',
+            'is_active',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate(self, attrs):
+        price = attrs.get(
+            'price', 
+            getattr(self.instance, 'price', None)
+            )
+        discount_price = attrs.get(
+            'discount_price',
+            getattr(self.instance, 'discount_price', None)
+        )
+        if (
+            price is not None 
+            and  discount_price is not None
+            and discount_price > price
+        ):
+            raise serializers.ValidationError({
+                'discount_price':'Discount price can not be grater than base price'
+            })
+        return attrs
+    

@@ -18,5 +18,9 @@ urlpatterns = [
     path('product-type-attributes/', views.ProductTypeAttributeListCreateAPIView.as_view()),
     path('product-type-attributes/<int:pk>/', views.ProductTypeAttributeDetailAPIView.as_view()),
     path('product-attribute-values/', views.ProductAttributeValueListCreateAPIView.as_view()),
-    path('product-attribute-values/<int:pk>/', views.ProductAttributeValueDetailAPIView.as_view())
+    path('product-attribute-values/<int:pk>/', views.ProductAttributeValueDetailAPIView.as_view()),
+    path('product-variants/', views.ProductVariantListCreateAPIView.as_view()),
+    path('product-variants/<int:pk>/', views.ProductVariantDetailAPIView.as_view()),
+
+
 ]
