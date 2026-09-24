@@ -194,6 +194,7 @@ class ProductTypeAttribute(models.Model):
         on_delete=models.PROTECT,
         related_name='product_type_links'
     )
+    can_be_variant_option = models.BooleanField(default=False)
     is_required = models.BooleanField(default=False)
     is_filterable = models.BooleanField(default=False)
     sort_order = models.PositiveIntegerField(default=0)
@@ -274,3 +275,27 @@ class ProductVariant(models.Model):
                     models.Q(discount_price__isnull=True)|(models.Q(discount_price__gte=0) &
                     models.Q(discount_price__lte=models.F('price'))
                     )), name='variant_valid_discount_price')]
+
+
+
+class VariantAttributeValue(models.Model):
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.CASCADE,
+        related_name='attribute_values'
+    )
+    attribute = models.ForeignKey(
+        Attribute,
+        on_delete=models.PROTECT,
+        related_name='variant_values'
+    )
+    value_text = models.CharField(max_length=255, null=True, blank=True)
+    value_number = models.DecimalField(max_digits=12, decimal_places=2, null=True,blank=True)
+    value_boolean = models.BooleanField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['variant', 'attribute'],
+                name='variant_attribute_unique'
+            )]

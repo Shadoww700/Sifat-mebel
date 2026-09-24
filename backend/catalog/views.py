@@ -263,3 +263,41 @@ class ProductVariantDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
                 models.ProductStatus.ACTIVE,
                 models.ProductStatus.OUT_OF_STOCK,
             ])
+
+
+class VariantAttributeValueListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = serializers.VariantAttributeValueSerializer
+    permission_classes = [IsAdminOrReadonly]
+
+    def get_queryset(self):
+        qs = models.VariantAttributeValue.objects.select_related(
+                'variant__product', 'attribute'
+            )
+        if self.request.user.is_staff:
+            return qs
+        return qs.filter(
+                variant__is_active=True,
+                variant__product__is_active=True,
+                variant__product__status__in=[
+                    models.ProductStatus.ACTIVE,
+                    models.ProductStatus.OUT_OF_STOCK
+                ])
+
+
+class VariantAttributeValueDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = serializers.VariantAttributeValueSerializer
+    permission_classes = [IsAdminOrReadonly]
+
+    def get_queryset(self):
+        qs = models.VariantAttributeValue.objects.select_related(
+                'variant__product', 'attribute'
+            )
+        if self.request.user.is_staff:
+            return qs
+        return qs.filter(
+            variant__is_active=True,
+            variant__product__is_active=True,
+            variant__product__status__in=[
+                models.ProductStatus.ACTIVE,
+                models.ProductStatus.OUT_OF_STOCK
+            ])

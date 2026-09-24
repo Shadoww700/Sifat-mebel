@@ -235,6 +235,7 @@ class ProductTypeAttributeSerializer(serializers.ModelSerializer):
             'product_type_info',
             'attribute',
             'attribute_info',
+            'is_variant_option',
             'is_required',
             'is_filterable',
             'sort_order'
@@ -375,4 +376,107 @@ class ProductVariantSerializer(serializers.ModelSerializer):
                 'discount_price':'Discount price can not be grater than base price'
             })
         return attrs
-    
+
+class ProductVariantMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.ProductVariant
+        fields = [
+            'id',
+            'sku',
+            'name',
+            'price',
+            'discount_price',
+            'stock_quantity'
+        ]
+
+class VariantAttributeValueSerializer(serializers.ModelSerializer):
+    variant = serializers.PrimaryKeyRelatedField(
+            queryset=models.ProductVariant.objects.filter(is_active=True)
+        )
+    variant_info = ProductVariantMiniSerializer(
+        read_only=True, source='variant'
+    )
+    attribute_info = AttributeSerializer(
+        read_only=True, source='attribute'
+    )
+    class Meta:
+        model = models.VariantAttributeValue
+        fields = [
+            'id',
+            'variant',
+            'variant_info',
+            'attribute_info',
+            'attribute',
+            'value_text',
+            'value_number',
+            'value_boolean'
+        ]
+        read_only_fields = ['id']
+
+    def validate(self, attrs):
+        variant = attrs.get(
+            'variant', getattr(self.instance, 'variant', None)
+        )
+        attribute = attrs.get(
+            'attribute', getattr(self.instance, 'attribute', None)
+        )
+
+        if variant is None or attribute is None:
+            raise serializers.ValidationError(
+                'Varinats and Attributes are required'
+            )
+
+        allowed = models.ProductTypeAttribute.objects.filter(
+            product_type=variant.product.product_type,
+            attribute=attribute,
+            can_be_variant_option=True
+        ).exists()
+
+        if not allowed:
+            raise serializers.ValidationError({
+                'variant':'This attribute is not allowed for this variant'
+            })
+
+        value_text = attrs.get(
+            'value_text', getattr(self.instance, 'value_text', None)
+        )
+        value_number = attrs.get(
+            'value_number', getattr(self.instance, 'value_number', None)
+        )
+        value_boolean = attrs.get(
+            'value_boolean', getattr(self.instance, 'value_boolean', None)
+        )
+
+        if attribute.data_type == models.AttributeDataType.TEXT:
+            if (
+                value_text is None
+                or not value_text.strip()
+                or value_boolean is not None
+                or value_number is not None
+            ):
+                raise serializers.ValidationError({
+                    'value_text':'TEXT - you can user only text & non-empty'
+                })
+            
+        elif attribute.data_type == models.AttributeDataType.NUMBER:
+            if (
+                value_number is None
+                or value_boolean is not None
+                or value_text is not None
+            ):
+                raise serializers.ValidationError({
+                    'value_number':'NUMBER - you can user only number'
+                })
+
+        elif attribute.data_type == models.AttributeDataType.BOOLEAN:
+            if (
+                value_boolean is None
+                or value_text is not None
+                or value_number is not None
+            ):
+                raise serializers.ValidationError({
+                    'value_boolean':'BOOLEAN - you can use only yes/no (boolean)'
+                })
+        return attrs
+
+
