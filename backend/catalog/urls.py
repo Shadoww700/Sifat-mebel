@@ -23,6 +23,6 @@ urlpatterns = [
     path('product-variants/<int:pk>/', views.ProductVariantDetailAPIView.as_view()),
     path('variant-attribute-values/', views.VariantAttributeValueListCreateAPIView.as_view()),
     path('variant-attribute-values/<int:pk>/', views.VariantAttributeValueDetailAPIView.as_view()),
-
+    path('stock/adjust/', views.StockAdjustAPIView.as_view()),
 
 ]

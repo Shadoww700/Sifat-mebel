@@ -235,7 +235,7 @@ class ProductTypeAttributeSerializer(serializers.ModelSerializer):
             'product_type_info',
             'attribute',
             'attribute_info',
-            'is_variant_option',
+            'can_be_variant_option',
             'is_required',
             'is_filterable',
             'sort_order'
@@ -480,3 +480,37 @@ class VariantAttributeValueSerializer(serializers.ModelSerializer):
         return attrs
 
 
+
+class StockAdjustmentSerializer(serializers.Serializer):
+    variant_id = serializers.IntegerField(min_value=1)
+    operation = serializers.ChoiceField(
+        choices=models.StockMovementChoices.choices
+    )
+    quantity = serializers.IntegerField(min_value=1)
+    reason = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default=''
+    )
+
+
+class StockMovementSerializer(serializers.ModelSerializer):
+    variant_info = ProductVariantMiniSerializer(
+        source='variant', read_only=True
+    )
+    class Meta:
+        model = models.StockMovement
+        fields = [
+            'id', 
+            'variant',
+            'variant_info',
+            'operation',
+            'quantity',
+            'reason',
+            'created_at'
+        ]
+        read_only_fields = [
+            'id', 'created_at'
+        ]
+
+    

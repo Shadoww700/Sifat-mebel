@@ -299,3 +299,36 @@ class VariantAttributeValue(models.Model):
                 fields=['variant', 'attribute'],
                 name='variant_attribute_unique'
             )]
+
+
+class StockMovementChoices(models.TextChoices):
+    IN = 'IN', 'IN'
+    OUT = 'OUT', 'OUT'
+
+class StockMovement(models.Model):
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name='stock_movements'
+    )
+    operation = models.CharField(
+        max_length=10, 
+        choices=StockMovementChoices.choices
+    )
+    quantity = models.PositiveIntegerField()
+    reason = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name='quantity_grater_than_0'
+            )]
+        ordering = ['-created_at', '-id']
+        
+
+    def __str__(self):
+        return (
+            f"{self.variant} - "
+            f"{self.operation} {self.quantity}"
+        )

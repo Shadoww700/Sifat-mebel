@@ -3,11 +3,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated,IsAdminUser
 from .permissions import (
     IsAdminOrReadonly
 )
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
 
-
-from . import models
     
-from . import serializers
+from . import serializers, models, services
 
 
 class CategoryListCreateAPIView(generics.ListCreateAPIView):
@@ -301,3 +302,23 @@ class VariantAttributeValueDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
                 models.ProductStatus.ACTIVE,
                 models.ProductStatus.OUT_OF_STOCK
             ])
+
+
+class StockAdjustAPIView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        serializer = serializers.StockAdjustmentSerializer(
+            data=request.data
+        )
+        serializer.is_valid(raise_exception=True)
+        movement = services.adjust_stock(
+            **serializer.validated_data
+        )
+        response_serializer = serializers.StockMovementSerializer(
+            movement
+        )
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED
+        )
