@@ -1,8 +1,11 @@
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated,IsAdminUser
-from .permissions import (
-    IsAdminOrReadonly
+from accounts.permissions import (
+    IsAdminOrReadonly,
+    IsAdminOnly,
+    is_admin
 )
+from accounts.models import UserRole
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -40,7 +43,7 @@ class BrandListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAdminOrReadonly]
 
     def get_queryset(self):
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return models.Brand.objects.all().order_by('id')
         return models.Brand.objects.filter(
             is_active=True
@@ -52,7 +55,7 @@ class BrandDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminOrReadonly]
 
     def get_queryset(self):
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return models.Brand.objects.all()
         return models.Brand.objects.filter(is_active=True)
 
@@ -63,7 +66,7 @@ class ProductTypeListCreateAPIView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         qs = models.ProductType.objects.select_related('category')
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs   
                 
         return qs.filter(is_active=True)
@@ -75,7 +78,7 @@ class ProductTypeDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         qs = models.ProductType.objects.select_related('category')
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs   
         
         return qs.filter(is_active=True)
@@ -88,7 +91,7 @@ class ProductListCreateAPIView(generics.ListCreateAPIView):
     def get_queryset(self):
         qs = models.Product.objects.select_related('brand', 'product_type__category')
         
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs
         
         return qs.filter(
@@ -107,7 +110,7 @@ class ProductDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         qs = models.Product.objects.select_related(
             'brand',
             'product_type__category')
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs
         
         return qs.filter(
@@ -128,7 +131,7 @@ class ProductImageListCreateAPIView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         qs = models.ProductImage.objects.select_related('product')
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs
         return qs.filter(
             product__is_active=True,
@@ -144,7 +147,7 @@ class ProductImageDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         qs = models.ProductImage.objects.select_related('product')
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs
         
         return qs.filter(
@@ -176,7 +179,7 @@ class ProductTypeAttributeListCreateAPIView(generics.ListCreateAPIView):
             'product_type__category', 'attribute'
         ).order_by('sort_order', 'id')
 
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs
         return qs.filter(
             product_type__is_active=True
@@ -192,7 +195,7 @@ class ProductTypeAttributeDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
             'product_type__category', 'attribute'
         ).order_by('sort_order', 'id')
     
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs
         return qs.filter(
             product_type__is_active=True
@@ -208,7 +211,7 @@ class ProductAttributeValueListCreateAPIView(generics.ListCreateAPIView):
             'product', 'attribute'
         )
 
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs
         return qs.filter(
             product__is_active=True,
@@ -227,7 +230,7 @@ class ProductAttributeValueDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
             'product', 'attribute'
         )
 
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs
         return qs.filter(
             product__is_active=True,
@@ -243,7 +246,7 @@ class ProductVariantListCreateAPIView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         qs = models.ProductVariant.objects.select_related('product')
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs
         
         return qs.filter(product__is_active=True)
@@ -254,7 +257,7 @@ class ProductVariantDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         qs = models.ProductVariant.objects.select_related('product')
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs
             
         return qs.filter(
@@ -274,7 +277,7 @@ class VariantAttributeValueListCreateAPIView(generics.ListCreateAPIView):
         qs = models.VariantAttributeValue.objects.select_related(
                 'variant__product', 'attribute'
             )
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs
         return qs.filter(
                 variant__is_active=True,
@@ -293,7 +296,7 @@ class VariantAttributeValueDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         qs = models.VariantAttributeValue.objects.select_related(
                 'variant__product', 'attribute'
             )
-        if self.request.user.is_staff:
+        if self.request.user.is_staff or self.request.user.role == UserRole.ADMIN:
             return qs
         return qs.filter(
             variant__is_active=True,
@@ -322,3 +325,18 @@ class StockAdjustAPIView(APIView):
             response_serializer.data,
             status=status.HTTP_201_CREATED
         )
+
+
+class StockMovementListAPIView(generics.ListAPIView):
+    serializer_class = serializers.StockMovementSerializer
+    permission_classes = [IsAdminOnly]
+
+    def get_queryset(self):
+        qs = models.StockMovement.objects.select_related("variant")
+
+        variant_id = self.request.query_params.get("variant_id")
+
+        if variant_id:
+            qs = qs.filter(variant_id=variant_id)
+
+        return qs

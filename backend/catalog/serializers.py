@@ -77,7 +77,7 @@ class ProductSerializer(serializers.ModelSerializer):
         queryset=models.ProductType.objects.filter(is_active=True)
     )
     brand = serializers.PrimaryKeyRelatedField(
-        queryset=models.ProductType.objects.filter(is_active=True)
+        queryset=models.Brand.objects.filter(is_active=True)
     )
     class Meta:
         model = models.Product
@@ -131,6 +131,7 @@ class ProductSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'discount_price':'Discount price cannot be greater than base price.'
             })
+        return attrs
 
     def create(self, validated_data):
         if validated_data.get('status') == models.ProductStatus.ACTIVE:

@@ -26,7 +26,7 @@ def adjust_stock(*, variant_id, operation, quantity, reason=''):
 
         variant.save(update_fields=['stock_quantity'])
         movement = StockMovement.objects.create(
-            variant=variant_id,
+            variant=variant,
             operation=operation,
             quantity=quantity,
             reason=reason
