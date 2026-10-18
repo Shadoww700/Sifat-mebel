@@ -481,6 +481,61 @@ class VariantAttributeValueSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class ProductVariantDetailSerializer(serializers.ModelSerializer):
+    attribute_values = VariantAttributeValueSerializer(
+        many=True, read_only=True
+    )
+    class Meta:
+        model = models.ProductVariant
+        fields = [
+            'id', 
+            'sku',
+            'name', 
+            'price',
+            'discount_price',
+            'stock_quantity',
+            'attribute_values'
+        ]
+
+
+class ProductDetailSerializer(serializers.ModelSerializer):
+    product_type_info = ProductTypeSerializer(
+        source='product_type', read_only=True
+    )
+    brand_info = BrandSerializer(
+        source='brand', read_only=True
+    )
+    images = ProductImageSerializer(
+        many=True, read_only=True
+    )
+    attribute_values = ProductAttributeValueSerializer(
+        many=True, read_only=True
+    )
+    variants = ProductVariantDetailSerializer(
+        many=True, read_only=True
+    )
+ 
+    class Meta:
+        model = models.Product
+        fields = [
+            'id',
+            'name',
+            'slug',
+            'short_description',
+            'description',
+            'sku',
+            'base_price',
+            'discount_price',
+            'currency',
+            'status',
+            'warranty',
+            'country_of_origin',
+            'product_type_info',
+            'brand_info',
+            'images',
+            'attribute_values',
+            'variants',
+        ]
 
 class StockAdjustmentSerializer(serializers.Serializer):
     variant_id = serializers.IntegerField(min_value=1)
