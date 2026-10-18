@@ -2,7 +2,9 @@ from rest_framework import serializers
 from django.utils import timezone
 from . import models
    
-
+from accounts.permissions import (
+    is_admin
+)
 
 
 
@@ -569,4 +571,38 @@ class StockMovementSerializer(serializers.ModelSerializer):
             'id', 'created_at'
         ]
 
-    
+
+class FavoriteSerializer(serializers.ModelSerializer):
+    user = serializers.HiddenField(
+        default=serializers.CurrentUserDefault()
+    )
+    class Meta:
+        model = models.Favorite
+        fields = [
+            'id', 
+            'user',
+            'product',
+            'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']
+        validators = []
+
+    def validate_product(self, product):
+        user = self.context['request'].user
+
+        if not is_admin(user):
+            allowed = models.Product.objects.filter(
+                pk=product.pk,
+                is_active=True,
+                brand__is_active=True,
+                product_type__category__is_active=True,
+                status__in=[
+                    models.ProductStatus.ACTIVE,
+                    models.ProductStatus.OUT_OF_STOCK
+                ]).exists()
+
+            if not allowed:
+                raise serializers.ValidationError(
+                    'This Product is not available'
+                )
+        return product

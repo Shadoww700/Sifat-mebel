@@ -3,7 +3,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated,IsAdminUser
 from accounts.permissions import (
     IsAdminOrReadonly,
     IsAdminOnly,
-    is_admin
+    is_admin,
+    IsOwner
 )
 from accounts.models import UserRole
 from rest_framework.views import APIView
@@ -380,4 +381,39 @@ class StockMovementListAPIView(generics.ListAPIView):
         return qs
 
 
+class FavoriteListCreateAPIView(generics.ListCreateAPIView):
+    serializer_class = serializers.FavoriteSerializer
+    permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        return models.Favorite.objects.filter(
+            user=self.request.user
+        )
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        favorite, created = models.Favorite.objects.get_or_create(
+            user=request.user,
+            product=serializer.validated_data['product']
+        )
+
+        result = self.get_serializer(favorite)
+
+        return Response(
+            result.data,
+            status=201 if created else 200
+        )
+
+class FavoriteDeleteAPIView(generics.RetrieveDestroyAPIView):
+    serializer_class = serializers.FavoriteSerializer
+    permission_classes = [IsOwner, IsAuthenticated]
+
+    def get_queryset(self):
+        qs = models.Favorite.objects.all()
+        if is_admin(self.request.user):
+            return qs
+        return qs.filter(
+            user=self.request.user
+        )
