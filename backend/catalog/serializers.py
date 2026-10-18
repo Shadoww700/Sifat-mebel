@@ -359,7 +359,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'stock_quantity']
 
     def validate(self, attrs):
         price = attrs.get(

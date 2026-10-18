@@ -10,7 +10,7 @@ from accounts.models import UserRole
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-
+from django.db.models import Prefetch
     
 from . import serializers, models, services
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -135,14 +135,21 @@ class ProductDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminOrReadonly]
 
     def get_queryset(self):
+        variant_qs = models.ProductVariant.objects.all()
+
+        if not is_admin(self.request.user):
+            variant_qs = variant_qs.filter(is_active=True)
+
         qs = models.Product.objects.select_related(
             'brand',
             'product_type__category'
             ).prefetch_related(
                 'images',
                 'attribute_values',
-                'variants__attribute_values'
-            )
+                Prefetch(
+                'variants',
+                queryset=variant_qs.prefetch_related('attribute_values')
+                ))
         if is_admin(self.request.user):
             return qs
         
@@ -288,7 +295,15 @@ class ProductVariantListCreateAPIView(generics.ListCreateAPIView):
         if is_admin(self.request.user):
             return qs
         
-        return qs.filter(product__is_active=True)
+        return qs.filter(
+            is_active=True,
+            product__is_active=True,
+            product__brand__is_active=True,
+            product__product_type__category__is_active=True,
+            product__status__in=[
+                models.ProductStatus.ACTIVE,
+                models.ProductStatus.OUT_OF_STOCK,
+            ])
 
 class ProductVariantDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = serializers.ProductVariantSerializer
@@ -302,10 +317,15 @@ class ProductVariantDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         return qs.filter(
             is_active=True,
             product__is_active=True,
+            product__brand__is_active=True,
+            product__product_type__category__is_active=True,
             product__status__in=[
                 models.ProductStatus.ACTIVE,
                 models.ProductStatus.OUT_OF_STOCK,
             ])
+    def perform_destroy(self, instance):
+        instance.is_active=False
+        instance.save(update_fields=['is_active', 'updated_at'])
 
 
 class VariantAttributeValueListCreateAPIView(generics.ListCreateAPIView):
