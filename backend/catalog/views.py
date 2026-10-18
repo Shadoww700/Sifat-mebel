@@ -14,7 +14,8 @@ from django.db.models import Prefetch
     
 from . import serializers, models, services
 from rest_framework.filters import SearchFilter, OrderingFilter
-
+from django_filters.rest_framework import DjangoFilterBackend
+from .filters import ProductFilter
 
 class CategoryListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = serializers.CategorySerializer
@@ -89,7 +90,12 @@ class ProductTypeDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
 class ProductListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = serializers.ProductSerializer
     permission_classes = [IsAdminOrReadonly]
-    filter_backends = [SearchFilter, OrderingFilter]
+    filter_backends = [
+        SearchFilter, 
+        OrderingFilter,
+        DjangoFilterBackend
+        ]
+    filterset_class = ProductFilter
     search_fields = [
         'name', 
         'short_description',
@@ -104,10 +110,6 @@ class ProductListCreateAPIView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         qs = models.Product.objects.select_related('brand', 'product_type__category')
-        brand_id = self.request.query_params.get('brand_id')
-        category_id = self.request.query_params.get('category_id')
-        min_price = self.request.query_params.get('min_price')
-        max_price = self.request.query_params.get('max_price')
 
         if not is_admin(self.request.user):
             qs = qs.filter(
@@ -118,16 +120,6 @@ class ProductListCreateAPIView(generics.ListCreateAPIView):
                     models.ProductStatus.ACTIVE,
                     models.ProductStatus.OUT_OF_STOCK
                 ])
-            
-        if category_id:
-            qs = qs.filter(product_type__category=category_id)
-        if brand_id:
-            qs = qs.filter(brand_id=brand_id)
-        if min_price:
-            qs = qs.filter(base_price__gte=float(min_price))
-        if max_price:
-            qs = qs.filter(base_price__lte=float(max_price))
-
         return qs 
 
 
