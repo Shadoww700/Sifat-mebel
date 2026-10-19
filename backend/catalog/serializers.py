@@ -596,6 +596,7 @@ class FavoriteSerializer(serializers.ModelSerializer):
                 is_active=True,
                 brand__is_active=True,
                 product_type__category__is_active=True,
+                product_type__is_active=True,
                 status__in=[
                     models.ProductStatus.ACTIVE,
                     models.ProductStatus.OUT_OF_STOCK

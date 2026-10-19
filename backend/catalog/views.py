@@ -116,6 +116,7 @@ class ProductListCreateAPIView(generics.ListCreateAPIView):
                 is_active=True,
                 brand__is_active=True,
                 product_type__category__is_active=True,
+                product_type__is_active=True,
                 status__in=[
                     models.ProductStatus.ACTIVE,
                     models.ProductStatus.OUT_OF_STOCK
@@ -149,6 +150,7 @@ class ProductDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
             is_active=True,
             brand__is_active=True,
             product_type__category__is_active=True,
+            product_type__is_active=True,
             status__in=[
                 models.ProductStatus.ACTIVE,
                 models.ProductStatus.OUT_OF_STOCK
@@ -292,6 +294,7 @@ class ProductVariantListCreateAPIView(generics.ListCreateAPIView):
             product__is_active=True,
             product__brand__is_active=True,
             product__product_type__category__is_active=True,
+            product__product_type__is_active=True,
             product__status__in=[
                 models.ProductStatus.ACTIVE,
                 models.ProductStatus.OUT_OF_STOCK,
@@ -311,6 +314,7 @@ class ProductVariantDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
             product__is_active=True,
             product__brand__is_active=True,
             product__product_type__category__is_active=True,
+            product__product_type__is_active=True,
             product__status__in=[
                 models.ProductStatus.ACTIVE,
                 models.ProductStatus.OUT_OF_STOCK,
