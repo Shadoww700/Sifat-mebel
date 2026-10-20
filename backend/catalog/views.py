@@ -16,6 +16,8 @@ from . import serializers, models, services
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import ProductFilter
+from .pagination import ProductPagination
+
 
 class CategoryListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = serializers.CategorySerializer
@@ -90,6 +92,7 @@ class ProductTypeDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
 class ProductListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = serializers.ProductSerializer
     permission_classes = [IsAdminOrReadonly]
+    pagination_class = ProductPagination
     filter_backends = [
         SearchFilter, 
         OrderingFilter,
