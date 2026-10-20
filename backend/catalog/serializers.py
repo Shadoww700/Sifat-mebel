@@ -548,7 +548,8 @@ class StockAdjustmentSerializer(serializers.Serializer):
     reason = serializers.CharField(
         required=False,
         allow_blank=True,
-        default=''
+        default='',
+        max_length=255
     )
 
 
