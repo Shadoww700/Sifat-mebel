@@ -1,0 +1,215 @@
+/* Catalog v1 extensions. Shared palette, typography and breakpoints live in store.css. */
+.s-product-info,
+.s-gallery {
+  min-width: 0;
+}
+.s-selected-summary {
+  padding-bottom: var(--s-space-4);
+}
+.s-selected-sku {
+  margin: 12px 0 0;
+  color: var(--s-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.s-selected-sku strong {
+  color: var(--s-ink);
+}
+.s-variant-selector {
+  display: grid;
+  gap: var(--s-space-5);
+  padding-block: var(--s-space-5);
+  border-top: 1px solid var(--s-border);
+}
+.s-variant-selector fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.s-variant-selector legend {
+  padding: 0 0 10px;
+  font-weight: 700;
+  font-size: 12px;
+}
+.s-variant-options {
+  display: flex;
+  gap: var(--s-space-2);
+  overflow-x: auto;
+  padding: 5px 4px 9px;
+  margin-inline: -4px;
+  scrollbar-width: thin;
+}
+.s-variant-options button {
+  flex: 0 0 auto;
+  min-height: 48px;
+  min-width: 84px;
+  border: 1px solid var(--s-border);
+  border-radius: var(--s-radius);
+  background: transparent;
+  color: var(--s-ink);
+  padding: 12px 16px;
+  font-weight: 700;
+}
+.s-variant-options button[aria-pressed="true"] {
+  background: var(--s-accent-soft);
+  border-color: var(--s-accent-ink);
+  box-shadow: inset 0 -2px var(--s-accent);
+}
+.s-variant-options button small {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  margin-top: 4px;
+}
+.s-variant-options button:disabled {
+  opacity: 0.6;
+  border-style: dashed;
+}
+.s-variant-fallback {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.s-variant-fallback select {
+  max-width: 100%;
+  min-height: 48px;
+  padding: 8px;
+  background: var(--s-paper);
+  border: 1px solid var(--s-border);
+}
+.s-button.s-contact-button {
+  background: var(--s-accent);
+  border-color: var(--s-accent);
+  color: var(--s-ink);
+}
+.s-button.s-contact-button:hover {
+  background: var(--s-accent-hover);
+}
+.s-button.s-contact-button svg {
+  color: var(--s-ink);
+}
+.s-contact-summary {
+  margin-block: var(--s-space-6);
+  border-block: 1px solid var(--s-border);
+  padding-block: var(--s-space-5);
+}
+.s-contact-summary h3 {
+  font-size: 22px;
+  margin-top: 12px;
+}
+.s-contact-summary textarea {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  min-height: 180px;
+  padding: 14px;
+  border: 1px solid var(--s-border);
+  background: var(--s-bg);
+  color: var(--s-ink);
+  font: 500 14px/1.8 var(--s-ui);
+  margin-bottom: 16px;
+  border-radius: var(--s-radius);
+}
+.s-contact-actions {
+  display: grid;
+  gap: 12px;
+}
+.s-contact-actions a {
+  overflow-wrap: anywhere;
+}
+.s-contact-pending {
+  padding: 20px;
+  background: var(--s-stone);
+  font-size: 13px;
+}
+.s-button.s-button-outline {
+  background: transparent;
+  color: var(--s-ink);
+  border-color: var(--s-border);
+}
+.s-contact-page {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(32px, 7vw, 120px);
+  padding-block: 24px;
+}
+.s-contact-panel {
+  background: var(--s-stone);
+  padding: clamp(24px, 4vw, 64px);
+  align-self: start;
+}
+.s-contact-panel h2 {
+  margin-top: 24px;
+  font-size: clamp(34px, 3.2vw, 56px);
+}
+.s-contact-panel .s-button {
+  width: 100%;
+  gap: 12px;
+}
+.s-contact-number {
+  display: block;
+  margin-bottom: 24px;
+  font-size: 20px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.s-contact-steps > div {
+  position: relative;
+  border-bottom: 1px solid var(--s-border);
+  padding: 12px 0 24px 46px;
+  margin-bottom: 24px;
+}
+.s-contact-steps > div > span {
+  position: absolute;
+  left: 0;
+  top: 12px;
+  font-size: 12px;
+  color: var(--s-accent-ink);
+  font-weight: 700;
+}
+.s-contact-steps h3 {
+  margin-bottom: 10px;
+}
+.s-contact-steps p {
+  color: var(--s-muted);
+  margin-bottom: 0;
+}
+.s-muted > .s-dot {
+  background: var(--s-border);
+}
+@media (max-width: 767px) {
+  .s-contact-page {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .s-mobile-purchase > span {
+    min-width: 0;
+  }
+  .s-mobile-purchase small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .s-mobile-purchase strong {
+    font-size: 12px;
+  }
+  .s-button.s-contact-compact {
+    flex: 0 0 auto;
+    padding: 12px;
+    min-height: 48px;
+    gap: 10px;
+  }
+  .s-contact-summary textarea {
+    font-size: 16px;
+  }
+}
+@media (max-width: 429px) {
+  .s-contact-panel {
+    padding: 24px 18px;
+  }
+  .s-button.s-contact-compact {
+    gap: 8px;
+    font-size: 11px;
+  }
+}
