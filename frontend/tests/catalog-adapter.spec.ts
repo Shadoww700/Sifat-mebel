@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { loadApiCatalog, productQuery } from "../src/lib/commerce/catalog-api";
 import { filterProducts, emptyFilters } from "../src/lib/commerce/browse";
 import { resolveCart } from "../src/lib/commerce/cart";
-import { demoCatalog } from "../src/lib/commerce/mock/catalog";
+import { demoCatalog, demoResponses } from "../src/lib/commerce/mock/catalog";
 import {
   productAttributes,
   type AttributeData,
@@ -61,7 +61,7 @@ test("query parameters exactly match existing Django filters and exclude unsuppo
 });
 
 // Test-only responses for the existing read endpoints. No server or backend writes.
-test("catalog adapter loads one product page and cached navigation/images without fetching all attributes or variants", async () => {
+test("catalog adapter loads one product page and page-scoped images without fetching all attributes or variants", async () => {
   const savedFetch = globalThis.fetch;
   const requests: string[] = [];
   const category = {
@@ -162,11 +162,112 @@ test("catalog adapter loads one product page and cached navigation/images withou
       filterProducts(catalog.products, { ...emptyFilters, available: true }),
     ).toEqual([]);
     expect(requests).toHaveLength(4);
+    expect(requests.filter((path) => path.includes("/product-image"))).toEqual([
+      "/api/v1/catalog/product-image?product_ids=10",
+    ]);
     expect(requests.filter((path) => path.includes("/products/"))).toEqual([
       "/api/v1/catalog/products/?page=1&page_size=20",
     ]);
     expect(catalog.pagination).toMatchObject({ page: 1, count: 25, pages: 2 });
     expect(catalog.issues).toEqual([]);
+  } finally {
+    globalThis.fetch = savedFetch;
+  }
+});
+
+test("page two requests exactly its product IDs and maps shuffled images by product ID", async () => {
+  const savedFetch = globalThis.fetch;
+  const requests: URL[] = [];
+  const ids = [80, 44, 120];
+  const products = ids.map((id, index) => ({
+    ...demoResponses.products[index],
+    id,
+  }));
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    requests.push(url);
+    if (url.pathname.endsWith("/products/")) {
+      expect(Object.fromEntries(url.searchParams)).toEqual({
+        page: "2",
+        page_size: "20",
+      });
+      return Response.json({
+        count: 23,
+        next: null,
+        previous: "?page=1",
+        results: products,
+      });
+    }
+    if (url.pathname.endsWith("/product-image")) {
+      expect(Object.fromEntries(url.searchParams)).toEqual({
+        product_ids: "80,44,120",
+      });
+      expect(init?.cache).toBe("no-store");
+      return Response.json(
+        [...ids].reverse().map((id) => ({
+          id,
+          product: id,
+          image: `/media/product-${id}.webp`,
+          alt_text: `Photo ${id}`,
+          is_primary: true,
+          sort_order: 0,
+        })),
+      );
+    }
+    if (url.pathname.endsWith("/categories/"))
+      return Response.json(demoResponses.categories);
+    if (url.pathname.endsWith("/brands/")) return Response.json([]);
+    throw new Error(`Unexpected request: ${url}`);
+  };
+  try {
+    const catalog = await loadApiCatalog({ page: 2 });
+    expect(
+      requests.filter((url) => url.pathname.endsWith("/product-image")),
+    ).toHaveLength(1);
+    expect(catalog.products.map((product) => product.id)).toEqual(
+      ids.map(String),
+    );
+    for (const product of catalog.products) {
+      expect(product.images).toHaveLength(1);
+      expect(product.images[0].src).toContain(
+        `/media/product-${product.id}.webp`,
+      );
+      expect(product.images[0].alt).toBe(`Photo ${product.id}`);
+    }
+  } finally {
+    globalThis.fetch = savedFetch;
+  }
+});
+
+test("scoped image failure preserves products and reports an image issue without an unfiltered retry", async () => {
+  const savedFetch = globalThis.fetch;
+  const imageRequests: URL[] = [];
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/products/"))
+      return Response.json({
+        count: 1,
+        next: null,
+        previous: null,
+        results: demoResponses.products.slice(0, 1),
+      });
+    if (url.pathname.endsWith("/product-image")) {
+      imageRequests.push(url);
+      return Response.json({ detail: "Unavailable" }, { status: 503 });
+    }
+    if (url.pathname.endsWith("/categories/"))
+      return Response.json(demoResponses.categories);
+    return Response.json([]);
+  };
+  try {
+    const catalog = await loadApiCatalog();
+    expect(catalog.products).toHaveLength(1);
+    expect(catalog.products[0].images).toEqual([]);
+    expect(catalog.issues?.map((issue) => issue.scope)).toEqual(["images"]);
+    expect(imageRequests).toHaveLength(1);
+    expect(imageRequests[0].searchParams.get("product_ids")).toBe(
+      String(demoResponses.products[0].id),
+    );
   } finally {
     globalThis.fetch = savedFetch;
   }
@@ -268,8 +369,10 @@ test("attribute filters are data-driven, URL-safe and exclude non-filterable fie
 
 test("empty product page skips image/attribute/variant requests instead of replacing it with mock products", async () => {
   const savedFetch = globalThis.fetch;
+  const requests: string[] = [];
   globalThis.fetch = async (input) => {
     const path = new URL(String(input)).pathname;
+    requests.push(path);
     if (
       [
         "/api/v1/catalog/categories/",
@@ -284,6 +387,9 @@ test("empty product page skips image/attribute/variant requests instead of repla
     const catalog = await loadApiCatalog();
     expect(catalog.source).toBe("api");
     expect(catalog.products).toEqual([]);
+    expect(requests.some((path) => path.endsWith("/product-image"))).toBe(
+      false,
+    );
     expect(catalog.issues?.map((issue) => issue.scope)).toEqual(["brands"]);
   } finally {
     globalThis.fetch = savedFetch;

@@ -126,10 +126,15 @@ export async function loadApiCatalog(
             return [];
           }),
   ]);
-  // Images are not paginated/filterable in the existing backend. One cached GET;
-  // do not issue one Product Detail request per card or scan other product pages.
-  const images = page.results.length
-    ? await catalogGet<ImageDTO[]>("product-image")
+  // Request images only for this page; no global image scan or per-card GETs.
+  // Fresh reads also respect products/parents that have just become hidden.
+  const productIds = page.results.map((product) => product.id);
+  const imageQuery = new URLSearchParams({ product_ids: productIds.join(",") });
+  const images = productIds.length
+    ? await catalogGet<ImageDTO[]>(
+        `product-image?${imageQuery}`,
+        true,
+      )
         .then(array<ImageDTO>)
         .catch(() => {
           issues.push({

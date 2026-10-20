@@ -168,6 +168,19 @@ test.beforeAll(async () => {
       );
       return;
     }
+    if (key === "product-image") {
+      const ids = (url.searchParams.get("product_ids") ?? "")
+        .split(",")
+        .map(Number);
+      // A missing filter is a regression: never emulate downloading all photos.
+      res.statusCode = url.searchParams.has("product_ids") ? 200 : 400;
+      res.end(
+        JSON.stringify(
+          demoResponses.images.filter((image) => ids.includes(image.product)),
+        ),
+      );
+      return;
+    }
     if (key === "brands") {
       res.end(
         JSON.stringify([
@@ -287,6 +300,16 @@ test("server pagination requests one page, commits filters once, preserves URL a
   expect(
     reads.filter((p) => p.startsWith("/api/v1/catalog/products/")),
   ).toHaveLength(1);
+  const imageRead = reads.find((p) =>
+    p.startsWith("/api/v1/catalog/product-image?"),
+  );
+  expect(imageRead).toBeDefined();
+  const requestedImageIds = new URL(`http://stub${imageRead}`).searchParams
+    .get("product_ids")!
+    .split(",");
+  expect(requestedImageIds).toEqual(
+    publicProducts.slice(0, 20).map((p) => String(p.id)),
+  );
   expect(
     reads.some((p) =>
       /product-variants|attribute-values|\/attributes\//.test(p),

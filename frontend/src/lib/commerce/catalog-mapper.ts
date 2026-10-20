@@ -21,7 +21,7 @@ export function mapCatalog(
     (t) => t.is_active !== false && categoryIds.has(t.category),
   );
   const typeIds = new Set(types.map((t) => t.id));
-  // Index once: images may still be a large unfiltered backend collection.
+  // Index images once for both page-scoped API data and isolated demo data.
   const images = new Map<number, CatalogData["images"]>();
   for (const image of data.images) {
     const group = images.get(image.product) ?? [];
