@@ -340,8 +340,9 @@ export function CatalogBrowser({
     </div>
   );
   return (
-    <>
+    <div className="s-browse-view">
       <SectionHeading
+        eyebrow={search ? "Найдите своё" : "Предметы и детали"}
         title={
           search
             ? filters.query
@@ -494,6 +495,7 @@ export function CatalogBrowser({
                   change({
                     ...initial,
                     query: "",
+                    category: lockedCategory ? initial.category : "",
                     type: "",
                     brand: "",
                     min: "",
@@ -531,6 +533,6 @@ export function CatalogBrowser({
           <Icon name="arrow" />
         </button>
       </Drawer>
-    </>
+    </div>
   );
 }

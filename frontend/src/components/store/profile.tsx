@@ -92,6 +92,10 @@ function ProfileForm({
         )}
         noValidate
       >
+        <div className="s-member-form-heading">
+          <h2>Личные данные</h2>
+          <p>Как к вам обращаться и по какому номеру связаться.</p>
+        </div>
         <div className="s-form-grid">
           <Field
             id="profile-first"
@@ -190,7 +194,7 @@ export function ProfileScreen() {
     <>
       <SectionHeading
         eyebrow="Личное пространство"
-        title="С возвращением."
+        title="Мой профиль"
         text="Ваша информация и настройки аккаунта."
       />
       <SessionGate>

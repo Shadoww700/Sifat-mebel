@@ -14,12 +14,16 @@ export function AccountShell({ children }: { children: React.ReactNode }) {
   const links: { href: string; label: string; icon: IconName }[] = [
     { href: "/account", label: "Мой профиль", icon: "user" },
     { href: "/addresses", label: "Мои адреса", icon: "location" },
-    { href: "/contact", label: "Связаться с магазином", icon: "phone" },
+    { href: "/contact", label: "Контакты", icon: "phone" },
     { href: "/favorites", label: "Избранное", icon: "heart" },
   ];
   return (
-    <div className="s-account-layout">
+    <div className="s-account-layout s-member-view">
       <nav className="s-account-nav" aria-label="Личный кабинет">
+        <div className="s-member-nav-heading">
+          <span className="s-kicker">Ваш Sifat</span>
+          <p>Личное пространство</p>
+        </div>
         {links.map((link) => (
           <Link
             key={link.href}

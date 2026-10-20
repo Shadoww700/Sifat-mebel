@@ -112,6 +112,7 @@ export function ProductCard({
             alt={product.images[0]?.alt ?? product.name}
             priority={priority}
             contain
+            sizes="(max-width: 429px) calc(100vw - 40px), (max-width: 599px) 50vw, (max-width: 1023px) 33vw, 25vw"
           />
         </Link>
         {product.badge && <span className="s-badge">{product.badge}</span>}

@@ -42,11 +42,16 @@ async function djangoFetch(
 
 async function responseBody(response: Response) {
   const text = await response.text();
-  if (!text) return { data: {} as Record<string, unknown> };
+  if (!text)
+    return { data: {} as Record<string, unknown>, status: response.status };
   try {
-    return { data: JSON.parse(text) as Record<string, unknown> };
+    return {
+      data: JSON.parse(text) as Record<string, unknown>,
+      status: response.status,
+    };
   } catch {
     return {
+      status: response.ok ? 502 : response.status,
       data: {
         detail: response.ok
           ? "Некорректный ответ API."
@@ -54,6 +59,10 @@ async function responseBody(response: Response) {
       },
     };
   }
+}
+
+function validToken(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function jsonResponse(data: unknown, status: number) {
@@ -65,6 +74,19 @@ function jsonResponse(data: unknown, status: number) {
 function clearSession(response: NextResponse) {
   response.cookies.set(ACCESS_COOKIE, "", { ...cookieOptions, maxAge: 0 });
   response.cookies.set(REFRESH_COOKIE, "", { ...cookieOptions, maxAge: 0 });
+}
+
+function setSession(response: NextResponse, access: string, refresh?: string) {
+  response.cookies.set(ACCESS_COOKIE, access, {
+    ...cookieOptions,
+    maxAge: 5 * 60,
+  });
+  if (refresh)
+    response.cookies.set(REFRESH_COOKIE, refresh, {
+      ...cookieOptions,
+      maxAge: 24 * 60 * 60,
+    });
+  return response;
 }
 
 async function handler(request: NextRequest, context: RouteContext) {
@@ -114,21 +136,26 @@ async function handler(request: NextRequest, context: RouteContext) {
   }
 
   if (isLogin) {
-    const { data } = await responseBody(backendResponse);
-    if (!backendResponse.ok) return jsonResponse(data, backendResponse.status);
+    const { data, status } = await responseBody(backendResponse);
+    if (!backendResponse.ok || status === 502)
+      return jsonResponse(data, status);
+    if (
+      !data ||
+      !validToken(data.access) ||
+      !validToken(data.refresh) ||
+      !data.user ||
+      typeof data.user !== "object" ||
+      Array.isArray(data.user)
+    )
+      return jsonResponse(
+        { detail: "Некорректный ответ сервиса авторизации." },
+        502,
+      );
     const nextResponse = jsonResponse(
       { user: data.user },
       backendResponse.status,
     );
-    nextResponse.cookies.set(ACCESS_COOKIE, String(data.access), {
-      ...cookieOptions,
-      maxAge: 5 * 60,
-    });
-    nextResponse.cookies.set(REFRESH_COOKIE, String(data.refresh), {
-      ...cookieOptions,
-      maxAge: 24 * 60 * 60,
-    });
-    return nextResponse;
+    return setSession(nextResponse, data.access, data.refresh);
   }
 
   const mayRefresh =
@@ -136,8 +163,9 @@ async function handler(request: NextRequest, context: RouteContext) {
     refresh &&
     route !== "v1/auth/token/refresh";
   if (mayRefresh) {
+    let refreshed: Response;
     try {
-      const refreshed = await fetch(
+      refreshed = await fetch(
         new URL("/api/v1/auth/token/refresh/", DJANGO_ORIGIN),
         {
           method: "POST",
@@ -149,37 +177,74 @@ async function handler(request: NextRequest, context: RouteContext) {
           cache: "no-store",
         },
       );
-      if (refreshed.ok) {
-        const tokens = (await refreshed.json()) as {
-          access: string;
-          refresh?: string;
-        };
-        backendResponse = await djangoFetch(request, path, tokens.access, body);
-        const { data } = await responseBody(backendResponse);
-        const nextResponse = jsonResponse(data, backendResponse.status);
-        nextResponse.cookies.set(ACCESS_COOKIE, tokens.access, {
-          ...cookieOptions,
-          maxAge: 5 * 60,
-        });
-        if (tokens.refresh)
-          nextResponse.cookies.set(REFRESH_COOKIE, tokens.refresh, {
-            ...cookieOptions,
-            maxAge: 24 * 60 * 60,
-          });
-        if (backendResponse.status === 401) clearSession(nextResponse);
-        return nextResponse;
-      }
     } catch {
-      // The original 401 is returned below and the invalid session is cleared.
+      // Network/service failure is not evidence of an invalid refresh token.
+      return jsonResponse(
+        { detail: "Не удалось обновить сессию. Попробуйте позже." },
+        503,
+      );
     }
+    if (refreshed.ok) {
+      const { data: tokens, status } = await responseBody(refreshed);
+      if (
+        status === 502 ||
+        !tokens ||
+        !validToken(tokens.access) ||
+        (tokens.refresh !== undefined && !validToken(tokens.refresh))
+      )
+        return jsonResponse(
+          { detail: "Некорректный ответ сервиса авторизации." },
+          502,
+        );
+      const nextAccess = tokens.access;
+      const nextRefresh = validToken(tokens.refresh)
+        ? tokens.refresh
+        : undefined;
+      try {
+        // Logout must blacklist the rotated token, not its obsolete predecessor.
+        const replayBody =
+          isLogout && nextRefresh
+            ? JSON.stringify({ refresh: nextRefresh })
+            : body;
+        backendResponse = await djangoFetch(
+          request,
+          path,
+          nextAccess,
+          replayBody,
+        );
+      } catch {
+        // Rotation may have invalidated the old refresh already. Keep the
+        // new cookies even if the subsequent business request loses network.
+        return setSession(
+          jsonResponse(
+            { detail: "Сервер временно недоступен. Попробуйте ещё раз." },
+            503,
+          ),
+          nextAccess,
+          nextRefresh,
+        );
+      }
+      const { data, status: replayStatus } =
+        await responseBody(backendResponse);
+      const nextResponse = jsonResponse(data, replayStatus);
+      setSession(nextResponse, nextAccess, nextRefresh);
+      if (backendResponse.status === 401 || isLogout || isLogoutAll)
+        clearSession(nextResponse);
+      return nextResponse;
+    }
+    if (![400, 401].includes(refreshed.status))
+      return jsonResponse(
+        { detail: "Не удалось обновить сессию. Попробуйте позже." },
+        refreshed.status,
+      );
     const { data } = await responseBody(backendResponse);
     const expiredResponse = jsonResponse(data, 401);
     clearSession(expiredResponse);
     return expiredResponse;
   }
 
-  const { data } = await responseBody(backendResponse);
-  const nextResponse = jsonResponse(data, backendResponse.status);
+  const { data, status } = await responseBody(backendResponse);
+  const nextResponse = jsonResponse(data, status);
   if (isLogout || isLogoutAll) clearSession(nextResponse);
   return nextResponse;
 }

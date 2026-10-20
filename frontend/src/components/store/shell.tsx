@@ -9,6 +9,8 @@ import "@/styles/store.css";
 import "@/styles/catalog-contact.css";
 import "@/styles/theme.css";
 import "@/styles/store-ux.css";
+import "@/styles/store-refined.css";
+import "@/styles/store-polish.css";
 import { readTheme } from "@/lib/theme/server";
 import { ThemeSurface } from "./theme";
 

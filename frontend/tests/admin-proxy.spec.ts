@@ -11,6 +11,9 @@ let frontend: ChildProcess;
 let origin: string;
 const received: { path: string; method: string; auth: string; body: Buffer }[] =
   [];
+let refreshMode: "ok" | "outage" | "invalid" | "malformed" | "missing" = "ok";
+let loginMode: "ok" | "missing" | "html" = "ok";
+let disconnectProfile = false;
 
 test.beforeAll(async () => {
   upstream = createServer(async (req, res) => {
@@ -22,6 +25,20 @@ test.beforeAll(async () => {
     received.push({ path, auth, body, method: req.method ?? "" });
     res.setHeader("Content-Type", "application/json");
     if (path === "/api/v1/auth/token/refresh/") {
+      if (refreshMode !== "ok") {
+        res.statusCode =
+          refreshMode === "outage"
+            ? 503
+            : refreshMode === "invalid"
+              ? 401
+              : 200;
+        res.end(
+          refreshMode === "malformed"
+            ? "<html>Bad upstream response</html>"
+            : JSON.stringify({ detail: refreshMode }),
+        );
+        return;
+      }
       res.end(
         JSON.stringify({
           access: "fresh-test-token",
@@ -31,6 +48,40 @@ test.beforeAll(async () => {
     } else if (auth === "Bearer expired-test-token") {
       res.statusCode = 401;
       res.end(JSON.stringify({ detail: "Token expired" }));
+    } else if (path === "/api/v1/auth/login/") {
+      res.end(
+        loginMode === "html"
+          ? "<html>Bad login response</html>"
+          : JSON.stringify(
+              loginMode === "missing"
+                ? { user: { id: 1 } }
+                : {
+                    user: {
+                      id: 1,
+                      email: "customer@test.invalid",
+                      role: "USER",
+                    },
+                    access: "login-access",
+                    refresh: "login-refresh",
+                  },
+            ),
+      );
+    } else if (
+      path === "/api/v1/auth/logout/" ||
+      path === "/api/v1/auth/logout-all/"
+    ) {
+      res.statusCode =
+        path.endsWith("logout-all/") ||
+        JSON.parse(body.toString()).refresh === "rotated-test-refresh"
+          ? 200
+          : 400;
+      res.end(JSON.stringify({ message: "Logged out" }));
+    } else if (path === "/api/v1/profile/" && req.method === "PATCH") {
+      if (disconnectProfile) {
+        req.socket.destroy();
+        return;
+      }
+      res.end("<html>Unexpected upstream page</html>");
     } else if (
       req.method === "OPTIONS" &&
       path === "/api/v1/catalog/stock/movements/"
@@ -103,6 +154,106 @@ test.afterAll(async () => {
 });
 test.beforeEach(() => {
   received.length = 0;
+  refreshMode = "ok";
+  loginMode = "ok";
+  disconnectProfile = false;
+});
+
+test("upstream HTML success is a 502, including after JWT replay, not a successful save", async ({
+  request,
+}) => {
+  for (const cookie of [
+    "sifat_access=staff-test-token",
+    "sifat_access=expired-test-token; sifat_refresh=refresh-test-token",
+  ]) {
+    const response = await request.patch(`${origin}/api/backend/v1/profile`, {
+      headers: { cookie },
+      data: { first_name: "Тест" },
+    });
+    expect(response.status()).toBe(502);
+    expect((await response.json()).detail).toContain("ответ");
+  }
+});
+
+test("refresh outages preserve cookies and return service errors; rejected refresh still clears the session", async ({
+  request,
+}) => {
+  for (const mode of ["outage", "malformed", "missing", "invalid"] as const) {
+    refreshMode = mode;
+    const response = await request.fetch(
+      `${origin}/api/backend/v1/catalog/stock/movements`,
+      {
+        method: "OPTIONS",
+        headers: {
+          cookie:
+            "sifat_access=expired-test-token; sifat_refresh=refresh-test-token",
+        },
+      },
+    );
+    expect(response.status()).toBe(
+      mode === "outage" ? 503 : mode === "invalid" ? 401 : 502,
+    );
+    if (mode === "invalid")
+      expect(response.headers()["set-cookie"]).toContain("Max-Age=0");
+    else expect(response.headers()["set-cookie"]).toBeUndefined();
+  }
+});
+
+test("login validates its response before storing cookies, while a valid login keeps httpOnly tokens", async ({
+  request,
+}) => {
+  for (const mode of ["missing", "html", "ok"] as const) {
+    loginMode = mode;
+    const response = await request.post(`${origin}/api/backend/v1/auth/login`, {
+      data: { email: "customer@test.invalid", password: "TestOnly" },
+    });
+    expect(response.status()).toBe(mode === "ok" ? 200 : 502);
+    if (mode === "ok") {
+      expect(response.headers()["set-cookie"]).toContain("HttpOnly");
+      expect(await response.json()).toEqual({
+        user: { id: 1, email: "customer@test.invalid", role: "USER" },
+      });
+    } else expect(response.headers()["set-cookie"]).toBeUndefined();
+  }
+});
+
+test("logout with expired access clears cookies after refresh and uses the rotated refresh token", async ({
+  request,
+}) => {
+  for (const route of ["logout", "logout-all"]) {
+    const response = await request.post(
+      `${origin}/api/backend/v1/auth/${route}`,
+      {
+        headers: {
+          cookie:
+            "sifat_access=expired-test-token; sifat_refresh=refresh-test-token",
+        },
+        data: {},
+      },
+    );
+    expect(response.status()).toBe(200);
+    const cookies = response.headers()["set-cookie"];
+    expect(cookies).toContain("sifat_access=;");
+    expect(cookies).toContain("sifat_refresh=;");
+    expect(cookies).toContain("Max-Age=0");
+  }
+});
+
+test("successful token rotation is preserved if the replayed request loses its connection", async ({
+  request,
+}) => {
+  disconnectProfile = true;
+  const response = await request.patch(`${origin}/api/backend/v1/profile`, {
+    headers: {
+      cookie:
+        "sifat_access=expired-test-token; sifat_refresh=refresh-test-token",
+    },
+    data: { first_name: "Тест" },
+  });
+  expect(response.status()).toBe(503);
+  expect(response.headers()["set-cookie"]).toContain("fresh-test-token");
+  expect(response.headers()["set-cookie"]).toContain("rotated-test-refresh");
+  expect(response.headers()["set-cookie"]).not.toContain("Max-Age=0");
 });
 
 test("guest me stays local and OPTIONS forwards the real backend staff verdict", async ({

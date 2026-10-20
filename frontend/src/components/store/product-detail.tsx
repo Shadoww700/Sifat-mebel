@@ -50,7 +50,7 @@ export function ProductDetail({
   const needsSelection = product.variants.length > 0 && !variant;
   const attributes = resolvedAttributes(product, variant);
   return (
-    <>
+    <div className="s-product-view">
       <div className="s-product-detail">
         <ProductGallery product={product} />
         <div className="s-product-info">
@@ -212,6 +212,6 @@ export function ProductDetail({
           </div>
         </section>
       )}
-    </>
+    </div>
   );
 }

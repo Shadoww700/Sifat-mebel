@@ -287,6 +287,53 @@ test.beforeEach(() => {
   outOfStockId = null;
 });
 
+test("saved API products retain usable cards in both refined themes on phone, tablet and desktop", async ({
+  page,
+  context,
+}) => {
+  records.set("account-a", [favorite(801, 1), favorite(802, 2)]);
+  await login(page);
+  for (const theme of ["day", "evening"]) {
+    await context.addCookies([
+      { name: "sifat-theme", value: theme, url: origin },
+    ]);
+    for (const width of [320, 430, 768, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto(`${origin}/favorites`);
+      const main = page.locator("#store-content");
+      await expect(main.locator(".s-product-card")).toHaveCount(2);
+      await expect(
+        main.getByRole("button", {
+          name: "Убрать из избранного: Кресло Orom",
+          exact: true,
+        }),
+      ).toBeEnabled();
+      for (const card of await main.locator(".s-product-card").all()) {
+        const favoriteBox = await card.locator(".s-favorite").boundingBox();
+        expect(favoriteBox!.width).toBeGreaterThanOrEqual(44);
+        expect(favoriteBox!.height).toBeGreaterThanOrEqual(44);
+        const badge = card.locator(".s-badge");
+        if (await badge.count()) {
+          const badgeBox = await badge.boundingBox();
+          expect(badgeBox!.x + badgeBox!.width).toBeLessThanOrEqual(
+            favoriteBox!.x,
+          );
+        }
+      }
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      if ([320, 1440].includes(width))
+        await page.screenshot({
+          path: `test-results/refined-saved-${theme}-${width}.png`,
+        });
+    }
+  }
+  expect(writes).toEqual([]);
+});
+
 test("server pagination requests one page, commits filters once, preserves URL and restores browser history", async ({
   page,
 }) => {
@@ -480,11 +527,11 @@ test("OUT_OF_STOCK is present on home/catalog/search/category and stays unavaila
   ).toBeVisible();
   await expect(
     page
-      .locator(".s-selected-summary")
+      .locator("#store-content .s-selected-summary")
       .getByText("Сейчас нет в наличии", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator(".s-selected-summary").getByText(/^В наличии/),
+    page.locator("#store-content .s-selected-summary").getByText(/^В наличии/),
   ).toHaveCount(0);
 });
 

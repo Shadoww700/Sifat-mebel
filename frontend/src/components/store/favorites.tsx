@@ -1,5 +1,6 @@
 "use client";
 import type { Product } from "@/lib/commerce/models";
+import Link from "next/link";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pagination } from "./pagination";
@@ -61,12 +62,16 @@ export function Favorites() {
       ),
   );
   return (
-    <>
+    <div className="s-favorites-view">
       <SectionHeading
         eyebrow="Сохранено для вас"
         title="Избранное"
-        text={"Ваша подборка сохраняется в аккаунте через API магазина."}
-      />
+        text="Соберите понравившиеся предметы в одном месте и вернитесь к выбору позже."
+      >
+        <Link className="s-text-link" href="/catalog" prefetch={false}>
+          Продолжить выбор
+        </Link>
+      </SectionHeading>
       {collection.status === "loading" ||
       (collection.status === "ready" && ids.length > 0 && details.isPending) ? (
         <ProductSkeletons />
@@ -137,6 +142,6 @@ export function Favorites() {
           text="Нажимайте на сердце у понравившихся предметов. Они будут ждать вас здесь."
         />
       )}
-    </>
+    </div>
   );
 }

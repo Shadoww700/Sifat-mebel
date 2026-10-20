@@ -1,0 +1,23 @@
+/* Final customer-only accessibility polish. Brand colors remain unchanged. */
+.store:not(.admin)
+  :is(a, button, input, select, textarea, summary):focus-visible {
+  outline-color: var(--s-accent-ink);
+}
+.store:not(.admin) .s-header .s-icon-button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  flex-basis: 44px;
+}
+.store:not(.admin) .s-footer-grid a:not(.s-logo) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.store:not(.admin) .s-drawer-heading h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.store:not(.admin) .s-drawer-heading .s-icon-button {
+  flex-shrink: 0;
+}

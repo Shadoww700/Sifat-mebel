@@ -20,14 +20,15 @@ test("variant selection, guest favorites protection and contact summary replace 
       unimplementedRequests.push(request.url());
   });
   await page.goto("/products/macbook-air-m4");
-  await expect(page.locator(".s-selected-sku")).toContainText("MBA-M4-16-256");
+  const selectedSku = page.locator("#store-content .s-selected-sku");
+  await expect(selectedSku).toContainText("MBA-M4-16-256");
   await page.getByRole("button", { name: "512 GB", exact: true }).click();
   await expect(page.locator(".s-detail-price")).toContainText(/13\s?400/);
   await expect(page.locator(".s-detail-price del")).toContainText(/13\s?900/);
   await expect(page.locator(".s-selected-summary")).toContainText("7 шт.");
   await page.getByRole("button", { name: /24 GB/ }).click();
   await expect(page.getByRole("button", { name: /256 GB/ })).toBeDisabled();
-  await expect(page.locator(".s-selected-sku")).toContainText("MBA-M4-24-512");
+  await expect(selectedSku).toContainText("MBA-M4-24-512");
   await expect(page.locator(".s-selected-summary")).toContainText(
     "Сейчас нет в наличии",
   );

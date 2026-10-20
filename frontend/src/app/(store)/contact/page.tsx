@@ -12,12 +12,12 @@ import {
 export const metadata = { title: "Контакты — Sifat Mebel" };
 export default function ContactPage() {
   return (
-    <div className="s-container s-page">
+    <div className="s-container s-page s-contact-view">
       <Breadcrumbs items={[{ label: "Контакты" }]} />
       <SectionHeading
         eyebrow="Sifat · Личный подход"
         title="Давайте обсудим."
-        text="Поможем выбрать предмет и исполнение. Расскажем о наличии, стоимости и доставке — без онлайн-оформления и оплаты."
+        text="Позвоните или напишите нам. Обсудим понравившуюся мебель, её исполнение, наличие и доставку."
       />
       <div className="s-contact-page">
         <section className="s-contact-panel">
@@ -56,6 +56,7 @@ export default function ContactPage() {
           </div>
         </section>
         <section className="s-contact-steps" aria-label="Как выбрать товар">
+          <h2>От выбора — к деталям.</h2>
           <div>
             <span>01</span>
             <h3>Найдите своё</h3>

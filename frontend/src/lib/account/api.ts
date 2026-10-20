@@ -50,13 +50,23 @@ export const accountApi = {
     const items: Address[] = [];
     let path: string | null = "/profile/addresses";
     const visited = new Set<string>();
-    while (path && !visited.has(path)) {
+    while (path) {
+      if (visited.has(path)) throw new Error("Повторяющаяся страница адресов");
       visited.add(path);
-      const page: Address[] | { results: Address[]; next: string | null } =
-        await apiRequest(path, { cache: "no-store" });
-      items.push(...(Array.isArray(page) ? page : page.results));
-      if (Array.isArray(page) || !page.next) break;
-      const next: URL = new URL(page.next, "http://localhost");
+      const data: unknown = await apiRequest(path, { cache: "no-store" });
+      const page = data as { results?: unknown; next?: unknown } | null;
+      const batch = Array.isArray(data) ? data : page?.results;
+      if (!Array.isArray(batch)) throw new Error("Некорректный список адресов");
+      items.push(...batch);
+      if (Array.isArray(data) || !page?.next) break;
+      if (typeof page.next !== "string")
+        throw new Error("Некорректная пагинация адресов");
+      const next: URL = new URL(
+        page.next,
+        "http://pagination.local/api/v1/profile/addresses/",
+      );
+      if (next.pathname.replace(/\/$/, "") !== "/api/v1/profile/addresses")
+        throw new Error("Некорректная пагинация адресов");
       path = `/profile/addresses${next.search}`;
     }
     return items;

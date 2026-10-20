@@ -293,8 +293,8 @@ export function AddressesScreen() {
     <>
       <SectionHeading
         eyebrow="Всё на своём месте"
-        title="Мои адреса."
-        text="Места, куда хочется возвращаться."
+        title="Мои адреса"
+        text="Сохранённые адреса для обсуждения доставки с магазином."
       />
       <SessionGate>
         {(user) => <AddressData key={user.id} userId={user.id} />}
