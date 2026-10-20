@@ -16,9 +16,25 @@ export function mapCatalog(
   media: (path: string) => string,
 ): Catalog {
   const categories = data.categories.filter((c) => c.is_active !== false);
+  const categoryIds = new Set(categories.map((c) => c.id));
   const types = data.types.filter(
-    (t) => t.is_active !== false && categories.some((c) => c.id === t.category),
+    (t) => t.is_active !== false && categoryIds.has(t.category),
   );
+  const typeIds = new Set(types.map((t) => t.id));
+  // Index once: images may still be a large unfiltered backend collection.
+  const images = new Map<number, CatalogData["images"]>();
+  for (const image of data.images) {
+    const group = images.get(image.product) ?? [];
+    group.push(image);
+    images.set(image.product, group);
+  }
+  const variantsByProduct = new Map<number, CatalogData["variants"]>();
+  for (const variant of data.variants) {
+    if (!variant.is_active) continue;
+    const group = variantsByProduct.get(variant.product) ?? [];
+    group.push(variant);
+    variantsByProduct.set(variant.product, group);
+  }
   return {
     source,
     categories: categories.map((c) => ({
@@ -33,13 +49,12 @@ export function mapCatalog(
       .filter(
         (p) =>
           p.is_active !== false &&
-          p.status === "ACTIVE" &&
-          types.some((t) => t.id === p.product_type_info.id),
+          ["ACTIVE", "OUT_OF_STOCK"].includes(p.status) &&
+          typeIds.has(p.product_type_info.id),
       )
       .map((p): Product => {
-        const variants: Variant[] = data.variants
-          .filter((v) => v.product === p.id && v.is_active)
-          .map((v) => ({
+        const variants: Variant[] = (variantsByProduct.get(p.id) ?? []).map(
+          (v) => ({
             id: String(v.id),
             name: v.name,
             sku: v.sku,
@@ -56,12 +71,17 @@ export function mapCatalog(
                   })),
                 })
               : [],
-          }));
-        const stock = variants.length
-          ? variants.reduce((sum, v) => sum + (v.stock ?? 0), 0)
-          : null;
+          }),
+        );
+        const outOfStock = p.status === "OUT_OF_STOCK";
+        const stock = outOfStock
+          ? 0
+          : variants.length
+            ? variants.reduce((sum, v) => sum + (v.stock ?? 0), 0)
+            : null;
         return {
           id: String(p.id),
+          status: outOfStock ? "OUT_OF_STOCK" : "ACTIVE",
           name: p.name,
           slug: p.slug,
           brand: p.brand_info?.name ?? "",
@@ -72,15 +92,14 @@ export function mapCatalog(
           discountPrice:
             p.discount_price === null ? null : Number(p.discount_price),
           currency: p.currency,
-          images: data.images
-            .filter((i) => i.product === p.id)
+          images: (images.get(p.id) ?? [])
             .sort(
               (a, b) =>
                 Number(b.is_primary) - Number(a.is_primary) ||
                 a.sort_order - b.sort_order,
             )
             .map((i) => ({ src: media(i.image), alt: i.alt_text || p.name })),
-          available: stock === null || stock > 0,
+          available: !outOfStock && (stock === null || stock > 0),
           stock,
           variants,
           attributes: data.attributes

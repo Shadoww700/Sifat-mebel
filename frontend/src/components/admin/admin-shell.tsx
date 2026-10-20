@@ -1,7 +1,7 @@
 "use client";
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useId, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/lib/api/client";
 import { checkStaffAccess } from "@/lib/admin/access";
@@ -40,7 +40,6 @@ export function AdminShell({
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: "always",
-    refetchInterval: 60_000,
   });
   if (access.isPending)
     return (
@@ -105,6 +104,8 @@ function VerifiedAdmin({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const sectionId = useId();
   const client = useQueryClient();
   const [menu, setMenu] = useState(false);
   const adapter = useMemo(
@@ -197,6 +198,31 @@ function VerifiedAdmin({
           </div>
         </aside>
         <main id="admin-content" tabIndex={-1} className="a-main">
+          <div className="a-mobile-section">
+            <label htmlFor={sectionId}>Раздел управления</label>
+            <select
+              id={sectionId}
+              value={
+                pathname.startsWith("/admin/products/")
+                  ? "/admin/products"
+                  : pathname
+              }
+              onChange={(event) => {
+                setMenu(false);
+                router.push(event.target.value);
+              }}
+            >
+              <option value="/admin">Обзор</option>
+              {Object.entries(resources).map(([key, resource]) => (
+                <option key={key} value={`/admin/${key}`}>
+                  {resource.title}
+                </option>
+              ))}
+              <option value="/admin/stock-adjustments">
+                Корректировка остатков
+              </option>
+            </select>
+          </div>
           <div
             className={`a-source ${source === "demo" ? "a-source-demo" : ""}`}
             role="note"

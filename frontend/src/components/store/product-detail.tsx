@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Product } from "@/lib/commerce/models";
-import { money, productPrice } from "@/lib/commerce/models";
+import { money, productPrice, productStock } from "@/lib/commerce/models";
 import {
   matchingVariants,
   resolvedAttributes,
@@ -57,9 +57,13 @@ export function ProductDetail({
           <ProductEditLink product={product} />
           <span className="s-kicker">
             {product.brand} /{" "}
-            <Link href={`/catalog?type=${product.productType.id}`}>
-              {product.productType.name}
-            </Link>
+            {product.source === "api" ? (
+              product.productType.name
+            ) : (
+              <Link href={`/catalog?type=${product.productType.id}`}>
+                {product.productType.name}
+              </Link>
+            )}
           </span>
           <div className="s-product-title">
             <h1>{product.name}</h1>
@@ -72,7 +76,13 @@ export function ProductDetail({
           >
             <PriceDisplay product={product} variant={variant} detail />
             <AvailabilityBadge
-              stock={needsSelection ? null : (variant?.stock ?? product.stock)}
+              stock={
+                product.status === "OUT_OF_STOCK"
+                  ? 0
+                  : needsSelection
+                    ? null
+                    : productStock(product, variant)
+              }
               detailed
             />
             <p className="s-selected-sku">

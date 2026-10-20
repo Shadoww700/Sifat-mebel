@@ -195,7 +195,7 @@ test("simplified catalog search, removable filter chips and mobile cards work to
   await guest(page);
   await page.goto("/catalog");
   await expect(
-    page.getByRole("heading", { name: "Коллекция", exact: true }),
+    page.getByRole("heading", { name: "Каталог", exact: true }),
   ).toBeVisible();
   await expect(page.getByLabel("Поиск по коллекции")).toBeVisible();
   const sidebar = page.getByRole("complementary", { name: "Фильтры товаров" });

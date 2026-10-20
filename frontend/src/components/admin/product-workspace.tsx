@@ -20,14 +20,17 @@ type Section = (typeof sections)[number]["key"];
 /** One product context; existing forms/adapters remain the only write path. */
 export function ProductWorkspace({ productId }: { productId?: number }) {
   const router = useRouter();
-  const query = useAdminData([
-    "products",
-    "product-types",
-    "brands",
-    "categories",
-    "product-images",
-    "product-variants",
-  ]);
+  const query = useAdminData(
+    [
+      "product-types",
+      "brands",
+      "categories",
+      ...(productId
+        ? (["products", "product-images", "product-variants"] as ResourceKey[])
+        : []),
+    ],
+    { productId },
+  );
   const [section, setSection] = useState<Section>("details");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");

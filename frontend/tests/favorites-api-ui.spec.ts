@@ -11,8 +11,22 @@ let upstream: Server, frontend: ChildProcess, origin: string;
 let listStatus = 200,
   writeStatus = 200,
   sessionStatus = 200;
+let outOfStockId: number | null = null;
 const records = new Map<string, FavoriteDTO[]>();
 const writes: { method: string; path: string; body: unknown }[] = [];
+const reads: string[] = [];
+const publicProducts = [
+  ...demoResponses.products,
+  ...Array.from({ length: 40 }, (_, index) => ({
+    ...demoResponses.products[0],
+    id: 100 + index,
+    name: `Стул ${index + 1}`,
+    slug: `chair-${index + 1}`,
+    sku: `PAGE-${index + 1}`,
+    base_price: String(100 + index),
+    discount_price: null,
+  })),
+];
 const favorite = (id: number, product: number): FavoriteDTO => ({
   id,
   product,
@@ -20,7 +34,10 @@ const favorite = (id: number, product: number): FavoriteDTO => ({
 });
 test.beforeAll(async () => {
   upstream = createServer(async (req, res) => {
-    const path = new URL(req.url ?? "/", "http://stub").pathname;
+    const url = new URL(req.url ?? "/", "http://stub");
+    const path = url.pathname;
+    if (req.method === "GET" && path.startsWith("/api/v1/catalog/"))
+      reads.push(path + url.search);
     const account = req.headers.authorization?.replace("Bearer ", "") ?? "";
     res.setHeader("content-type", "application/json");
     if (path === "/api/v1/auth/me/") {
@@ -98,6 +115,101 @@ test.beforeAll(async () => {
       return;
     }
     const key = path.replace("/api/v1/catalog/", "").replace(/\/$/, "");
+    if (key === "products") {
+      let products = publicProducts.map((p) =>
+        p.id === outOfStockId ? { ...p, status: "OUT_OF_STOCK" } : p,
+      );
+      const q = url.searchParams;
+      if (q.get("search"))
+        products = products.filter((p) =>
+          `${p.name} ${p.short_description} ${p.brand_info?.name}`
+            .toLowerCase()
+            .includes(q.get("search")!.toLowerCase()),
+        );
+      if (q.get("brand_id"))
+        products = products.filter(
+          (p) => String(p.brand) === q.get("brand_id"),
+        );
+      if (q.get("category_id"))
+        products = products.filter(
+          (p) => String(p.product_type_info.category) === q.get("category_id"),
+        );
+      if (q.get("min_price"))
+        products = products.filter(
+          (p) => Number(p.base_price) >= Number(q.get("min_price")),
+        );
+      if (q.get("max_price"))
+        products = products.filter(
+          (p) => Number(p.base_price) <= Number(q.get("max_price")),
+        );
+      if (["base_price", "-base_price"].includes(q.get("ordering") ?? ""))
+        products.sort(
+          (a, b) =>
+            (Number(a.base_price) - Number(b.base_price)) *
+            (q.get("ordering") === "-base_price" ? -1 : 1),
+        );
+      const page = Number(q.get("page") ?? 1),
+        size = Number(q.get("page_size") ?? 20);
+      if (page > Math.max(1, Math.ceil(products.length / size))) {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ detail: "Invalid page." }));
+        return;
+      }
+      res.end(
+        JSON.stringify({
+          count: products.length,
+          next:
+            page * size < products.length
+              ? `http://untrusted.example/products/?page=${page + 1}`
+              : null,
+          previous: page > 1 ? `http://stub/products/?page=${page - 1}` : null,
+          results: products.slice((page - 1) * size, page * size),
+        }),
+      );
+      return;
+    }
+    if (key === "brands") {
+      res.end(
+        JSON.stringify([
+          ...new Map(
+            demoResponses.products.flatMap((p) =>
+              p.brand_info ? [[p.brand_info.id, p.brand_info] as const] : [],
+            ),
+          ).values(),
+        ]),
+      );
+      return;
+    }
+    if (/^product\/\d+$/.test(key)) {
+      const id = Number(key.split("/")[1]);
+      const product = publicProducts.find((p) => p.id === id);
+      res.statusCode = product ? 200 : 404;
+      res.end(
+        JSON.stringify(
+          product
+            ? {
+                ...product,
+                ...(product.id === outOfStockId
+                  ? { status: "OUT_OF_STOCK" }
+                  : {}),
+                images: demoResponses.images.filter((i) => i.product === id),
+                attribute_values: demoResponses.attributes!.values.filter(
+                  (v) => v.product === id,
+                ),
+                variants: demoResponses.variants
+                  .filter((v) => v.product === id)
+                  .map((v) => ({
+                    ...v,
+                    attribute_values: demoResponses.variantValues.filter(
+                      (a) => a.variant === v.id,
+                    ),
+                  })),
+              }
+            : {},
+        ),
+      );
+      return;
+    }
     res.statusCode = key in fixtures ? 200 : 404;
     res.end(JSON.stringify(fixtures[key] ?? {}));
   });
@@ -157,7 +269,235 @@ test.afterAll(async () => {
 test.beforeEach(() => {
   records.clear();
   writes.length = 0;
+  reads.length = 0;
   listStatus = writeStatus = sessionStatus = 200;
+  outOfStockId = null;
+});
+
+test("server pagination requests one page, commits filters once, preserves URL and restores browser history", async ({
+  page,
+}) => {
+  await page.goto(`${origin}/catalog`);
+  await expect(page.locator(".s-product-card")).toHaveCount(20);
+  await expect(
+    page
+      .locator("#store-content")
+      .getByText(`Найдено: ${publicProducts.length}`, { exact: true }),
+  ).toBeVisible();
+  expect(
+    reads.filter((p) => p.startsWith("/api/v1/catalog/products/")),
+  ).toHaveLength(1);
+  expect(
+    reads.some((p) =>
+      /product-variants|attribute-values|\/attributes\//.test(p),
+    ),
+  ).toBe(false);
+  const firstName = await page
+    .locator(".s-product-card h3")
+    .first()
+    .innerText();
+  await page.getByRole("link", { name: "Далее", exact: true }).click();
+  await expect(page).toHaveURL(/page=2/);
+  await expect(
+    page
+      .locator("#store-content")
+      .getByText("Страница 2 из 3", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".s-product-card")).toHaveCount(20);
+  expect(await page.locator(".s-product-card h3").first().innerText()).not.toBe(
+    firstName,
+  );
+  await page.goBack();
+  await expect(
+    page
+      .locator("#store-content")
+      .getByText("Страница 1 из 3", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Далее", exact: true }).click();
+  await expect(
+    page
+      .locator("#store-content")
+      .getByText("Страница 2 из 3", { exact: true }),
+  ).toBeVisible();
+  const beforeTyping = reads.filter((p) =>
+    p.startsWith("/api/v1/catalog/products/"),
+  ).length;
+  await page.getByLabel("Цена от", { exact: true }).first().fill("105");
+  await page.getByLabel("Цена до", { exact: true }).first().fill("130");
+  expect(
+    reads.filter((p) => p.startsWith("/api/v1/catalog/products/")),
+  ).toHaveLength(beforeTyping);
+  await page
+    .getByRole("button", { name: "Применить цену", exact: true })
+    .first()
+    .click();
+  await expect(page).not.toHaveURL(/page=2/);
+  await expect(
+    page.locator("#store-content").getByText("Найдено: 26", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Далее", exact: true }).click();
+  await expect(page).toHaveURL(/page=2/);
+  await expect(page.locator(".s-product-card")).toHaveCount(6);
+  const last = new URL(
+    `http://stub${reads.filter((p) => p.startsWith("/api/v1/catalog/products/")).at(-1)}`,
+  );
+  expect(Object.fromEntries(last.searchParams)).toMatchObject({
+    page: "2",
+    min_price: "105",
+    max_price: "130",
+  });
+  await page.reload();
+  await expect(
+    page
+      .locator("#store-content")
+      .getByText("Страница 2 из 2", { exact: true }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 800 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth + 1,
+    ),
+  ).toBe(true);
+  await page.screenshot({ path: "test-results/api-pagination-320.png" });
+});
+
+test("search finds a product outside page one; combined filters/order run on the server before slicing", async ({
+  page,
+}) => {
+  await page.goto(`${origin}/catalog?page=3`);
+  await expect(
+    page
+      .locator("#store-content")
+      .getByText("Страница 3 из 3", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Поиск по коллекции", { exact: true }).fill("Стул 40");
+  await page
+    .locator(".s-search-form")
+    .getByRole("button", { name: "Найти", exact: true })
+    .click();
+  await expect(
+    page.locator("#store-content").getByText("Найдено: 1", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".s-product-card h3")).toHaveText(["Стул 40"]);
+  await expect(page).not.toHaveURL(/page=/);
+  const brand = String(publicProducts[0].brand),
+    category = String(publicProducts[0].product_type_info.category);
+  await page.goto(
+    `${origin}/catalog?brand=${brand}&category=${category}&min=105&max=130&sort=price-desc&page=2`,
+  );
+  const expected = publicProducts
+    .filter(
+      (p) =>
+        String(p.brand) === brand &&
+        String(p.product_type_info.category) === category &&
+        Number(p.base_price) >= 105 &&
+        Number(p.base_price) <= 130,
+    )
+    .sort((a, b) => Number(b.base_price) - Number(a.base_price));
+  await expect(
+    page
+      .locator("#store-content")
+      .getByText(`Найдено: ${expected.length}`, { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".s-product-card h3")).toHaveText(
+    expected.slice(20, 40).map((p) => p.name),
+  );
+  const last = new URL(
+    `http://stub${reads.filter((p) => p.startsWith("/api/v1/catalog/products/")).at(-1)}`,
+  );
+  expect(Object.fromEntries(last.searchParams)).toMatchObject({
+    page: "2",
+    brand_id: brand,
+    category_id: category,
+    min_price: "105",
+    max_price: "130",
+    ordering: "-base_price",
+  });
+  await page.goto(`${origin}/search?q=${encodeURIComponent("Стул 40")}`);
+  await expect(page.locator(".s-product-card h3")).toHaveText(["Стул 40"]);
+  const selectedCategory = demoResponses.categories.find(
+    (c) => String(c.id) === category,
+  )!;
+  await page.goto(
+    `${origin}/categories/${selectedCategory.slug}?category=999&sort=price-asc`,
+  );
+  const categoryQuery = new URL(
+    `http://stub${reads.filter((p) => p.startsWith("/api/v1/catalog/products/")).at(-1)}`,
+  );
+  expect(categoryQuery.searchParams.get("category_id")).toBe(category);
+  await expect(page.locator(".s-product-card")).toHaveCount(20);
+});
+
+test("OUT_OF_STOCK is present on home/catalog/search/category and stays unavailable in detail despite positive variant stock", async ({
+  page,
+}) => {
+  outOfStockId = 1;
+  const product = publicProducts.find((p) => p.id === outOfStockId)!;
+  const category = demoResponses.categories.find(
+    (c) => c.id === product.product_type_info.category,
+  )!;
+  for (const path of [
+    "/",
+    "/catalog",
+    `/search?q=${encodeURIComponent(product.name)}`,
+    `/categories/${category.slug}`,
+  ]) {
+    await page.goto(`${origin}${path}`);
+    const card = page.locator(".s-product-card").filter({
+      has: page.getByRole("heading", { name: product.name, exact: true }),
+    });
+    await expect(card).toBeVisible();
+    await expect(
+      card.getByText("Сейчас нет в наличии", { exact: true }),
+    ).toBeVisible();
+  }
+  await page.goto(`${origin}/products/1`);
+  await expect(
+    page.getByRole("heading", { name: product.name, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator(".s-selected-summary")
+      .getByText("Сейчас нет в наличии", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".s-selected-summary").getByText(/^В наличии/),
+  ).toHaveCount(0);
+});
+
+test("home requests four products, categories request none, detail outside page one uses one ID request", async ({
+  page,
+}) => {
+  await page.goto(origin);
+  await expect(page.locator(".s-product-card")).toHaveCount(4);
+  const homeRequests = reads.filter((p) =>
+    p.startsWith("/api/v1/catalog/products/"),
+  );
+  expect(homeRequests).toHaveLength(1);
+  expect(reads.some((p) => /\/brands\/|\/product-types\//.test(p))).toBe(false);
+  expect(
+    new URL(`http://stub${homeRequests[0]}`).searchParams.get("page_size"),
+  ).toBe("4");
+  reads.length = 0;
+  await page.goto(`${origin}/categories`);
+  expect(reads.some((p) => p.startsWith("/api/v1/catalog/products/"))).toBe(
+    false,
+  );
+  reads.length = 0;
+  await page.goto(`${origin}/products/139`);
+  await expect(
+    page.getByRole("heading", { name: "Стул 40", exact: true }),
+  ).toBeVisible();
+  expect(reads.filter((p) => p.startsWith("/api/v1/catalog/product/"))).toEqual(
+    ["/api/v1/catalog/product/139/"],
+  );
+  expect(reads.some((p) => p.startsWith("/api/v1/catalog/products/"))).toBe(
+    false,
+  );
+  await page.goto(`${origin}/products/999999`);
+  await expect(
+    page.getByRole("heading", { name: "Этот предмет ещё не нашёлся" }),
+  ).toBeVisible();
 });
 async function login(page: Page, account = "account-a") {
   await page
@@ -216,7 +556,7 @@ test("real API flow adds once, updates header/PDP/list, persists, and deletes Fa
       body: { product: 1 },
     },
   ]);
-  await page.goto(`${origin}/products/orom-lounge`);
+  await page.goto(`${origin}/products/1`);
   await expect(
     page.getByRole("button", {
       name: "Убрать из избранного: Кресло Orom",

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loadApiCatalog } from "../src/lib/commerce/catalog-api";
+import { loadApiCatalog, productQuery } from "../src/lib/commerce/catalog-api";
 import { filterProducts, emptyFilters } from "../src/lib/commerce/browse";
 import { resolveCart } from "../src/lib/commerce/cart";
 import { demoCatalog } from "../src/lib/commerce/mock/catalog";
@@ -11,9 +11,57 @@ import {
 } from "../src/lib/commerce/catalog-attributes";
 import { attributeFacets } from "../src/lib/commerce/browse";
 import { browseParams } from "../src/lib/commerce/search-params";
+import { pageNumber } from "../src/lib/commerce/search-params";
+
+test("query parameters exactly match existing Django filters and exclude unsupported local filters", () => {
+  for (const [sort, ordering] of [
+    ["featured", "-created_at"],
+    ["price-asc", "base_price"],
+    ["price-desc", "-base_price"],
+    ["oldest", "created_at"],
+    ["name", "-created_at"],
+  ]) {
+    const query = productQuery({
+      page: 3,
+      filters: {
+        ...emptyFilters,
+        query: "Кресло Орех",
+        brand: "7",
+        category: "2",
+        min: "0",
+        max: "5000.25",
+        sort,
+        type: "99",
+        available: true,
+        attributes: { "9": "number:16" },
+      },
+    });
+    expect(Object.fromEntries(query)).toEqual({
+      page: "3",
+      page_size: "20",
+      search: "Кресло Орех",
+      brand_id: "7",
+      category_id: "2",
+      min_price: "0",
+      max_price: "5000.25",
+      ordering,
+    });
+  }
+  for (const page of [
+    "0",
+    "-1",
+    "abc",
+    "2.5",
+    "Infinity",
+    "999999999999999999999999999",
+  ]) {
+    expect(pageNumber({ page })).toBe(1);
+  }
+  expect(pageNumber({ page: "3" })).toBe(3);
+});
 
 // Test-only responses for the existing read endpoints. No server or backend writes.
-test("catalog adapter joins new attribute endpoints with existing products without inventing stock", async () => {
+test("catalog adapter loads one product page and cached navigation/images without fetching all attributes or variants", async () => {
   const savedFetch = globalThis.fetch;
   const requests: string[] = [];
   const category = {
@@ -45,6 +93,8 @@ test("catalog adapter joins new attribute endpoints with existing products witho
       "/api/v1/catalog/categories/": [category],
       "/api/v1/catalog/product-types/": [type],
       "/api/v1/catalog/products/": {
+        count: 25,
+        previous: null,
         next: new URL("/api/v1/catalog/products/?page=2", url.origin).href,
         results: [
           {
@@ -86,8 +136,9 @@ test("catalog adapter joins new attribute endpoints with existing products witho
         },
       ],
     };
-    expect(payloads[url.pathname + url.search]).toBeDefined();
-    return Response.json(payloads[url.pathname + url.search]);
+    if (url.pathname.endsWith("/brands/")) return Response.json([]);
+    expect(payloads[url.pathname]).toBeDefined();
+    return Response.json(payloads[url.pathname]);
   };
   try {
     const catalog = await loadApiCatalog();
@@ -100,27 +151,7 @@ test("catalog adapter joins new attribute endpoints with existing products witho
       basePrice: 4500.5,
       discountPrice: 4000.25,
       stock: null,
-      attributes: [
-        {
-          id: "3",
-          name: "Механизм раскладывания",
-          value: false,
-          filterable: true,
-        },
-        {
-          id: "2",
-          name: "Допустимая нагрузка",
-          value: 0,
-          unit: "кг",
-          filterable: true,
-        },
-        {
-          id: "1",
-          name: "Материал основания",
-          value: "Массив ореха",
-          filterable: false,
-        },
-      ],
+      attributes: [],
       variants: [],
       description: "Описание",
       brand: "",
@@ -130,7 +161,11 @@ test("catalog adapter joins new attribute endpoints with existing products witho
     expect(
       filterProducts(catalog.products, { ...emptyFilters, available: true }),
     ).toEqual([]);
-    expect(requests).toHaveLength(10);
+    expect(requests).toHaveLength(4);
+    expect(requests.filter((path) => path.includes("/products/"))).toEqual([
+      "/api/v1/catalog/products/?page=1&page_size=20",
+    ]);
+    expect(catalog.pagination).toMatchObject({ page: 1, count: 25, pages: 2 });
     expect(catalog.issues).toEqual([]);
   } finally {
     globalThis.fetch = savedFetch;
@@ -231,7 +266,7 @@ test("attribute filters are data-driven, URL-safe and exclude non-filterable fie
   });
 });
 
-test("optional image and attribute API failures are explicit without replacing real products", async () => {
+test("empty product page skips image/attribute/variant requests instead of replacing it with mock products", async () => {
   const savedFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
     const path = new URL(String(input)).pathname;
@@ -249,11 +284,7 @@ test("optional image and attribute API failures are explicit without replacing r
     const catalog = await loadApiCatalog();
     expect(catalog.source).toBe("api");
     expect(catalog.products).toEqual([]);
-    expect(catalog.issues?.map((issue) => issue.scope)).toEqual([
-      "attributes",
-      "images",
-      "variants",
-    ]);
+    expect(catalog.issues?.map((issue) => issue.scope)).toEqual(["brands"]);
   } finally {
     globalThis.fetch = savedFetch;
   }
@@ -270,14 +301,29 @@ test("catalog API failures are not silently replaced with demo products", async 
   }
 });
 
-test("catalog pagination cannot redirect reads to another origin", async () => {
+test("catalog never follows next URLs, including foreign URLs", async () => {
   const savedFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
-    Response.json({ results: [], next: "https://untrusted.example/data" });
-  try {
-    await expect(loadApiCatalog()).rejects.toThrow(
-      "Invalid catalog pagination",
+  const requests: string[] = [];
+  globalThis.fetch = async (input) => {
+    requests.push(String(input));
+    return Response.json(
+      String(input).includes("/products/")
+        ? {
+            count: 50,
+            results: [],
+            next: "https://untrusted.example/data",
+            previous: null,
+          }
+        : [],
     );
+  };
+  try {
+    const catalog = await loadApiCatalog();
+    expect(catalog.pagination?.count).toBe(50);
+    expect(requests.some((url) => url.includes("untrusted.example"))).toBe(
+      false,
+    );
+    expect(requests).toHaveLength(3);
   } finally {
     globalThis.fetch = savedFetch;
   }

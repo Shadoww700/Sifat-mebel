@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useState, useTransition } from "react";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import type { Catalog } from "@/lib/commerce/models";
 import {
   BrowseFilters,
@@ -20,11 +20,12 @@ import {
 import { Drawer } from "./drawer";
 import { Icon } from "./icons";
 import { CatalogStatus } from "./catalog-status";
+import { Pagination } from "./pagination";
 
 export function CatalogBrowser({
   catalog,
   initial,
-  title = "Коллекция",
+  title = "Каталог",
   search = false,
   lockedCategory = false,
 }: {
@@ -37,12 +38,30 @@ export function CatalogBrowser({
   const [open, setOpen] = useState(false);
   const params = useSearchParams();
   const pathname = usePathname();
-  const filters = {
-    ...browseParams(Object.fromEntries(params)),
-    ...(lockedCategory ? { category: initial.category } : {}),
-  };
-  const products = filterProducts(catalog.products, filters);
-  const facets = attributeFacets(catalog.products, filters);
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const server = catalog.source === "api";
+  const [prices, setPrices] = useState({ min: initial.min, max: initial.max });
+  const filters = server
+    ? {
+        ...initial,
+        type: "",
+        available: false,
+        attributes: {},
+        sort: ["featured", "price-asc", "price-desc", "oldest"].includes(
+          initial.sort,
+        )
+          ? initial.sort
+          : "featured",
+      }
+    : {
+        ...browseParams(Object.fromEntries(params)),
+        ...(lockedCategory ? { category: initial.category } : {}),
+      };
+  const products = server
+    ? catalog.products
+    : filterProducts(catalog.products, filters);
+  const facets = server ? [] : attributeFacets(catalog.products, filters);
   const change = (next: Partial<BrowseFilters>) => {
     const state = { ...filters, ...next };
     const params = new URLSearchParams();
@@ -54,6 +73,21 @@ export function CatalogBrowser({
     Object.entries(state.attributes).forEach(([id, value]) => {
       if (value) params.set(`attr.${id}`, value);
     });
+    if (server) {
+      // A filter commit starts at page 1 and asks Django, not the current page's array.
+      params.delete("page");
+      params.delete("type");
+      params.delete("available");
+      [...params.keys()]
+        .filter((key) => key.startsWith("attr."))
+        .forEach((key) => params.delete(key));
+      startTransition(() =>
+        router.push(`${pathname}${params.size ? `?${params}` : ""}`, {
+          scroll: false,
+        }),
+      );
+      return;
+    }
     window.history.replaceState(
       null,
       "",
@@ -99,7 +133,9 @@ export function CatalogBrowser({
   if (filters.brand)
     chips.push({
       key: "brand",
-      label: filters.brand,
+      label: server
+        ? (catalog.brands?.find((b) => b.id === filters.brand)?.name ?? "Бренд")
+        : filters.brand,
       clear: () => change({ brand: "" }),
     });
   if (filters.min)
@@ -153,25 +189,27 @@ export function CatalogBrowser({
           ))}
         </select>
       </label>
-      <label htmlFor={`${prefix}-type`}>
-        Тип товара
-        <select
-          id={`${prefix}-type`}
-          value={filters.type}
-          onChange={(e) => change({ type: e.target.value, attributes: {} })}
-        >
-          <option value="">Все предметы</option>
-          {catalog.types
-            .filter(
-              (t) => !filters.category || t.categoryId === filters.category,
-            )
-            .map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-        </select>
-      </label>
+      {!server && (
+        <label htmlFor={`${prefix}-type`}>
+          Тип товара
+          <select
+            id={`${prefix}-type`}
+            value={filters.type}
+            onChange={(e) => change({ type: e.target.value, attributes: {} })}
+          >
+            <option value="">Все предметы</option>
+            {catalog.types
+              .filter(
+                (t) => !filters.category || t.categoryId === filters.category,
+              )
+              .map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+          </select>
+        </label>
+      )}
       <label htmlFor={`${prefix}-brand`}>
         Бренд
         <select
@@ -180,11 +218,15 @@ export function CatalogBrowser({
           onChange={(e) => change({ brand: e.target.value })}
         >
           <option value="">Все бренды</option>
-          {Array.from(new Set(catalog.products.map((p) => p.brand)))
-            .filter(Boolean)
-            .map((b) => (
-              <option key={b}>{b}</option>
-            ))}
+          {server
+            ? catalog.brands?.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))
+            : Array.from(new Set(catalog.products.map((p) => p.brand)))
+                .filter(Boolean)
+                .map((b) => <option key={b}>{b}</option>)}
         </select>
       </label>
       {facets.length > 0 && (
@@ -232,7 +274,7 @@ export function CatalogBrowser({
         </details>
       )}
       <fieldset>
-        <legend>Цена, сомони</legend>
+        <legend>{server ? "Базовая цена, сомони" : "Цена, сомони"}</legend>
         <div className="s-price-inputs">
           <label>
             <span className="s-visually-hidden">Минимальная цена</span>
@@ -241,8 +283,12 @@ export function CatalogBrowser({
               type="number"
               min="0"
               placeholder="От"
-              value={filters.min}
-              onChange={(e) => change({ min: e.target.value })}
+              value={server ? prices.min : filters.min}
+              onChange={(e) =>
+                server
+                  ? setPrices((old) => ({ ...old, min: e.target.value }))
+                  : change({ min: e.target.value })
+              }
             />
           </label>
           <label>
@@ -252,20 +298,42 @@ export function CatalogBrowser({
               type="number"
               min="0"
               placeholder="До"
-              value={filters.max}
-              onChange={(e) => change({ max: e.target.value })}
+              value={server ? prices.max : filters.max}
+              onChange={(e) =>
+                server
+                  ? setPrices((old) => ({ ...old, max: e.target.value }))
+                  : change({ max: e.target.value })
+              }
             />
           </label>
         </div>
+        {server && (
+          <button
+            type="button"
+            className="s-text-button"
+            disabled={pending}
+            onClick={() => change(prices)}
+          >
+            Применить цену
+          </button>
+        )}
       </fieldset>
-      <label className="s-check">
-        <input
-          type="checkbox"
-          checked={filters.available}
-          onChange={(e) => change({ available: e.target.checked })}
-        />
-        Только в наличии
-      </label>
+      {!server && (
+        <label className="s-check">
+          <input
+            type="checkbox"
+            checked={filters.available}
+            onChange={(e) => change({ available: e.target.checked })}
+          />
+          Только в наличии
+        </label>
+      )}
+      {server && (
+        <p className="s-muted">
+          Поиск, категория, бренд и базовая цена — через API. Фильтры по типу,
+          характеристикам и остаткам пока не поддерживаются сервером.
+        </p>
+      )}
       <button className="s-text-button" type="button" onClick={reset}>
         Сбросить фильтры
       </button>
@@ -283,8 +351,12 @@ export function CatalogBrowser({
         }
         text={
           search
-            ? "По названию, бренду или материалу."
-            : "Выберите тип товара или найдите нужный предмет."
+            ? server
+              ? "По названию, краткому описанию, бренду или типу товара."
+              : "По названию, бренду или материалу."
+            : server
+              ? "Выберите категорию или найдите нужный товар."
+              : "Выберите тип товара или найдите нужный предмет."
         }
       />
       <CatalogStatus issues={catalog.issues} />
@@ -314,32 +386,38 @@ export function CatalogBrowser({
           </button>
         </form>
       }
-      <div className="s-type-tabs" aria-label="Тип товара">
-        <button
-          onClick={() => change({ type: "", attributes: {} })}
-          aria-pressed={!filters.type}
-        >
-          Все предметы
-        </button>
-        {catalog.types
-          .filter((t) => !filters.category || t.categoryId === filters.category)
-          .map((t) => (
-            <button
-              key={t.id}
-              onClick={() => change({ type: t.id, attributes: {} })}
-              aria-pressed={filters.type === t.id}
-            >
-              {t.name}
-            </button>
-          ))}
-      </div>
+      {!server && (
+        <div className="s-type-tabs" aria-label="Тип товара">
+          <button
+            onClick={() => change({ type: "", attributes: {} })}
+            aria-pressed={!filters.type}
+          >
+            Все предметы
+          </button>
+          {catalog.types
+            .filter(
+              (t) => !filters.category || t.categoryId === filters.category,
+            )
+            .map((t) => (
+              <button
+                key={t.id}
+                onClick={() => change({ type: t.id, attributes: {} })}
+                aria-pressed={filters.type === t.id}
+              >
+                {t.name}
+              </button>
+            ))}
+        </div>
+      )}
       <div className="s-catalog-toolbar">
         <button className="s-filter-toggle" onClick={() => setOpen(true)}>
           <Icon name="filter" />
           Фильтры{active > 0 && <span>{active}</span>}
         </button>
         <span className="s-result-count" role="status">
-          Найдено: {products.length}
+          {pending
+            ? "Загружаем товары…"
+            : `Найдено: ${catalog.pagination?.count ?? products.length}`}
         </span>
         <label className="s-sort">
           Порядок
@@ -348,10 +426,16 @@ export function CatalogBrowser({
             value={filters.sort}
             onChange={(e) => change({ sort: e.target.value })}
           >
-            <option value="featured">По умолчанию</option>
+            <option value="featured">
+              {server ? "Сначала новые" : "По умолчанию"}
+            </option>
             <option value="price-asc">Сначала дешевле</option>
             <option value="price-desc">Сначала дороже</option>
-            <option value="name">По названию</option>
+            {server ? (
+              <option value="oldest">Сначала старые</option>
+            ) : (
+              <option value="name">По названию</option>
+            )}
           </select>
         </label>
       </div>
@@ -360,7 +444,7 @@ export function CatalogBrowser({
           <h2>Подобрать предмет</h2>
           {form("desktop")}
         </aside>
-        <div className="s-catalog-results">
+        <div className="s-catalog-results" aria-busy={pending}>
           {active > 0 && (
             <div className="s-active-filters">
               <span>Фильтров: {active}</span>
@@ -388,7 +472,7 @@ export function CatalogBrowser({
                 <ProductCard key={p.id} product={p} priority={i < 3} />
               ))}
             </div>
-          ) : catalog.products.length === 0 ? (
+          ) : catalog.products.length === 0 && !filters.query && !active ? (
             <div className="s-empty-catalog">
               <EmptyState
                 title="Коллекция скоро появится"
@@ -424,11 +508,14 @@ export function CatalogBrowser({
               </button>
             </EmptyState>
           )}
+          {catalog.pagination && <Pagination {...catalog.pagination} />}
           {catalog.source === "demo" && <DemoNotice />}
           <p className="s-catalog-end">
-            {products.length > 0
-              ? "Вы посмотрели все предметы этой подборки."
-              : ""}{" "}
+            {catalog.pagination && catalog.pagination.pages > 1
+              ? `Показано ${products.length} товаров на этой странице.`
+              : products.length > 0
+                ? "Вы посмотрели все предметы этой подборки."
+                : ""}{" "}
             <Link href="/categories">Посмотреть пространства →</Link>
           </p>
         </div>

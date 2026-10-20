@@ -1,5 +1,13 @@
 # Sifat Mebel: разделение витрины и управления
 
+## 20 октября: мобильный вход в разделы
+
+До 1024 px боковая панель скрывается в меню. Теперь над содержимым есть видимый select «Раздел управления»: выберите «Бренды», затем «Создать бренд». Desktop-sidebar и существующее оформление сохранены (minimalist-ui). Исправление — `admin-shell.tsx`, `admin.css`; API-регрессия — `tests/admin-attributes-api.spec.ts`. Новый тест проходит переход из категорий в бренды и POST создания через HTTP-стенд на 320/390/768/1024 px, без записи в рабочую Django-БД. Снимки 320/768 px просмотрены вручную.
+
+Прикладного WebSocket или EventSource во frontend нет. Удалён `refetchInterval: 60_000` из admin access query; проверки при переходах/фокусе и перед записью сохранены, backend permissions не изменены. В `npm run dev` сам Next.js использует `/_next/hmr` WebSocket для горячего обновления кода; это не канал магазина и не часть production-запуска `npm run build` + `npm run start`. Нагрузочный тест на 200 посетителей не выполнялся.
+
+Проверки: ESLint, TypeScript и production build — успешно; полный Playwright — **76/76**. Backend, .env, Login/Register не изменялись. Актуальные данные каталога/избранного описаны в [PAGINATION.md](PAGINATION.md) и [FAVORITES.md](FAVORITES.md); ниже сохранён исторический отчёт.
+
 Актуальное дополнение 12 октября: [единая карточка и создание товара через UI](PRODUCT-WORKFLOW.md). Добавлены `/admin/products/new`, `/admin/products/[id]` и вход из шапки/мобильного меню. Финальная проверка этого дополнения: ESLint, TypeScript, production build, 53/53 Playwright.
 
 Обновление 11 октября 2026. Изменения агента — только `frontend/`. Backend, БД, миграции, .env и Login/Register не редактировались. Backend-файлы менялись владельцем во время работы; это учтено при повторной read-only сверке.

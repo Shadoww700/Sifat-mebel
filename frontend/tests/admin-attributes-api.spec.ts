@@ -41,7 +41,35 @@ test.beforeAll(async () => {
       .filter(Boolean);
     const key = parts[0];
     if (req.method === "GET") {
-      res.end(JSON.stringify(tables[key] ?? []));
+      if (key === "products") {
+        const query = new URL(req.url ?? "/", "http://stub").searchParams;
+        const result = tables.products.filter(
+          (row) =>
+            !query.get("search") ||
+            String(row.name).includes(query.get("search")!),
+        );
+        const page = Number(query.get("page") ?? 1),
+          size = Number(query.get("page_size") ?? 20);
+        res.end(
+          JSON.stringify({
+            count: result.length,
+            next:
+              page * size < result.length
+                ? "http://untrusted.example/page"
+                : null,
+            previous: null,
+            results: result.slice((page - 1) * size, page * size),
+          }),
+        );
+        return;
+      }
+      res.end(
+        JSON.stringify(
+          key === "product"
+            ? (tables.products.find((row) => row.id === Number(parts[1])) ?? {})
+            : (tables[key] ?? []),
+        ),
+      );
       return;
     }
     const chunks: Buffer[] = [];
@@ -174,16 +202,14 @@ test.beforeEach(async ({ page }) => {
   };
   failLink = false;
   writes.length = 0;
-  await page
-    .context()
-    .addCookies([
-      {
-        name: "sifat_access",
-        value: "isolated-admin",
-        url: origin,
-        httpOnly: true,
-      },
-    ]);
+  await page.context().addCookies([
+    {
+      name: "sifat_access",
+      value: "isolated-admin",
+      url: origin,
+      httpOnly: true,
+    },
+  ]);
 });
 async function openSetup(page: Page, variant = false) {
   await page.goto(`${origin}/admin/products/1`);
@@ -198,6 +224,144 @@ async function openSetup(page: Page, variant = false) {
     .click();
   return page.getByRole("dialog", { name: "Атрибут и значение", exact: true });
 }
+test("mobile section switcher opens brands and its create form saves through the existing API", async ({
+  page,
+}) => {
+  tables.brands.push(
+    ...Array.from({ length: 20 }, (_, index) => ({
+      id: 200 + index,
+      name: `Марка ${index}`,
+      slug: `existing-${index}`,
+      is_active: true,
+    })),
+  );
+  for (const width of [320, 390, 768, 1024]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`${origin}/admin/categories`);
+    if (width < 1024) {
+      await page
+        .getByLabel("Раздел управления", { exact: true })
+        .selectOption("/admin/brands");
+    } else {
+      await page
+        .locator(".a-sidebar")
+        .getByRole("link", { name: "Бренды", exact: true })
+        .click();
+    }
+    await expect(page).toHaveURL(/\/admin\/brands$/);
+    const create = page.getByRole("button", {
+      name: "Создать бренд",
+      exact: true,
+    });
+    await expect(create).toBeVisible();
+    await expect(create).toBeInViewport();
+    await create.click();
+    const dialog = page.getByRole("dialog", {
+      name: "Создать бренд",
+      exact: true,
+    });
+    await expect(dialog).toBeVisible();
+    await dialog
+      .getByLabel("Название *", { exact: true })
+      .fill(`Бренд ${width}`);
+    await dialog.getByLabel("Slug *", { exact: true }).fill(`brand-${width}`);
+    await dialog
+      .getByRole("button", { name: "Сохранить", exact: true })
+      .click();
+    await expect(dialog).not.toBeVisible();
+    expect(tables.brands.some((row) => row.slug === `brand-${width}`)).toBe(
+      true,
+    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
+    if (width === 320 || width === 768)
+      await page.screenshot({ path: `test-results/brands-${width}.png` });
+  }
+  expect(writes.map((row) => [row.key, row.method])).toEqual(
+    Array.from({ length: 4 }, () => ["brands", "POST"]),
+  );
+});
+
+test("admin product list paginates and opens an editable product outside the first page", async ({
+  page,
+}) => {
+  tables.products.push(
+    ...Array.from({ length: 40 }, (_, index) => ({
+      ...tables.products[0],
+      id: 100 + index,
+      name: `Товар ${index + 1}`,
+      slug: `audit-page-${index + 1}`,
+      sku: `AUDIT-${index + 1}`,
+    })),
+  );
+  await page.goto(`${origin}/admin/products`);
+  await expect(page.locator(".a-table tbody tr")).toHaveCount(20);
+  await page.getByRole("button", { name: "Далее", exact: true }).click();
+  await expect(
+    page.getByText("Страница 2 из 3", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: "Карточка управления: Товар 25", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Товар 25", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Название *", { exact: true })).toHaveValue(
+    "Товар 25",
+  );
+  expect(writes).toEqual([]);
+});
+
+test("product FK lookup finds a product beyond the first page and saves its actual ID", async ({
+  page,
+}) => {
+  tables.products.push(
+    ...Array.from({ length: 40 }, (_, index) => ({
+      ...tables.products[0],
+      id: 100 + index,
+      name: `Товар ${index + 1}`,
+      slug: `audit-page-${index + 1}`,
+      sku: `AUDIT-${index + 1}`,
+    })),
+  );
+  await page.goto(`${origin}/admin/product-variants`);
+  await page
+    .getByRole("button", { name: "Создать вариант", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", {
+    name: "Создать вариант",
+    exact: true,
+  });
+  await dialog.getByLabel("Найти товар для связи").fill("Товар 30");
+  await dialog
+    .getByRole("button", { name: "Найти товар", exact: true })
+    .click();
+  await dialog
+    .getByRole("button", { name: "Выбрать: Товар 30 · #129", exact: true })
+    .click();
+  await expect(dialog.getByLabel("Товар *", { exact: true })).toHaveValue(
+    "129",
+  );
+  await dialog
+    .getByLabel("Название *", { exact: true })
+    .fill("Вариант позднего товара");
+  await dialog
+    .getByLabel("Артикул варианта *", { exact: true })
+    .fill("LOOKUP-VARIANT");
+  await dialog.getByLabel("Цена *", { exact: true }).fill("100");
+  await dialog.getByRole("button", { name: "Сохранить", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  expect(writes).toHaveLength(1);
+  expect(writes[0]).toMatchObject({
+    key: "product-variants",
+    method: "POST",
+    payload: { product: 129 },
+  });
+});
+
 test("empty schema: create TEXT/NUMBER/BOOLEAN definitions, bind type, save correct typed values", async ({
   page,
 }) => {

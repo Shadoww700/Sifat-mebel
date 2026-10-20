@@ -1,4 +1,13 @@
 import { emptyFilters, type BrowseFilters } from "./browse";
+export function pageNumber(
+  params: Record<string, string | string[] | undefined>,
+): number {
+  const raw = Array.isArray(params.page) ? params.page[0] : params.page;
+  const number = Number(raw ?? 1);
+  return /^[1-9]\d*$/.test(String(raw ?? 1)) && Number.isSafeInteger(number)
+    ? number
+    : 1;
+}
 export function browseParams(
   params: Record<string, string | string[] | undefined>,
 ): BrowseFilters {

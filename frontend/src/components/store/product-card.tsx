@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { Product, Variant } from "@/lib/commerce/models";
+import { productHref } from "@/lib/commerce/models";
 import { localCommerce } from "@/lib/commerce/local-store";
 import { favoriteKey, useFavorites } from "@/lib/commerce/favorites";
 import { AvailabilityBadge, PriceDisplay } from "./product-facts";
@@ -102,7 +103,8 @@ export function ProductCard({
     <article className="s-product-card">
       <div className="s-card-media">
         <Link
-          href={`/products/${product.slug}`}
+          href={productHref(product)}
+          prefetch={false}
           aria-label={`Подробнее: ${product.name}`}
         >
           <ProductPhoto
@@ -120,7 +122,9 @@ export function ProductCard({
         <AvailabilityBadge stock={product.stock} />
       </div>
       <h3>
-        <Link href={`/products/${product.slug}`}>{product.name}</Link>
+        <Link href={productHref(product)} prefetch={false}>
+          {product.name}
+        </Link>
       </h3>
       <div className="s-card-bottom">
         <PriceDisplay
@@ -131,7 +135,8 @@ export function ProductCard({
         />
         <Link
           className="s-card-add"
-          href={`/products/${product.slug}`}
+          href={productHref(product)}
+          prefetch={false}
           aria-label={`Подробнее о товаре: ${product.name}`}
         >
           <Icon name="arrow" />

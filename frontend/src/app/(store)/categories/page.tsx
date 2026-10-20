@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCatalog } from "@/lib/commerce/catalog";
+import { getNavigation } from "@/lib/commerce/catalog";
 import { ProductPhoto } from "@/components/store/product-image";
 import {
   Breadcrumbs,
@@ -9,14 +9,18 @@ import {
 import { Icon } from "@/components/store/icons";
 export const metadata = { title: "Категории — Sifat Mebel" };
 export default async function CategoriesPage() {
-  const catalog = await getCatalog();
+  const catalog = await getNavigation();
   return (
     <div className="s-container s-page">
       <Breadcrumbs items={[{ label: "Категории" }]} />
       <SectionHeading
         eyebrow="Категории и типы товаров"
         title="Место для вашего."
-        text="Выберите категорию, затем — нужный тип товара."
+        text={
+          catalog.source === "api"
+            ? "Выберите категорию, чтобы открыть её товары. Типы перечислены для ориентира."
+            : "Выберите категорию, затем — нужный тип товара."
+        }
       />
       {catalog.categories.length ? (
         <div className="s-category-grid">
@@ -42,14 +46,18 @@ export default async function CategoriesPage() {
                 <div className="s-category-types">
                   {catalog.types
                     .filter((t) => t.categoryId === c.id)
-                    .map((t) => (
-                      <Link
-                        key={t.id}
-                        href={`/catalog?category=${c.id}&type=${t.id}`}
-                      >
-                        {t.name}
-                      </Link>
-                    ))}
+                    .map((t) =>
+                      catalog.source === "api" ? (
+                        <span key={t.id}>{t.name}</span>
+                      ) : (
+                        <Link
+                          key={t.id}
+                          href={`/catalog?category=${c.id}&type=${t.id}`}
+                        >
+                          {t.name}
+                        </Link>
+                      ),
+                    )}
                 </div>
               </div>
             </article>

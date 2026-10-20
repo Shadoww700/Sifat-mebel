@@ -115,6 +115,27 @@
   display: grid;
   gap: 12px;
 }
+.s-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+.s-pagination > span {
+  font-size: 13px;
+}
+.s-pagination .s-button {
+  min-height: 44px;
+  padding: 12px 16px;
+}
+.s-category-types > span {
+  padding: 10px 15px;
+  border: 1px solid var(--s-border);
+  font-size: 11px;
+  color: var(--s-muted);
+}
 .s-contact-actions a {
   overflow-wrap: anywhere;
 }

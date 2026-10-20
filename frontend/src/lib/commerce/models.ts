@@ -33,6 +33,7 @@ export type Variant = {
 };
 export type Product = {
   id: string;
+  status: "ACTIVE" | "OUT_OF_STOCK";
   slug: string;
   name: string;
   brand: string;
@@ -53,13 +54,23 @@ export type Product = {
   delivery: string;
   source: DataSource;
 };
+/** Store publication status takes precedence over a variant's physical stock. */
+export const productStock = (product: Product, variant?: Variant) =>
+  product.status === "OUT_OF_STOCK" ? 0 : (variant?.stock ?? product.stock);
 export type Catalog = {
   products: Product[];
   categories: Category[];
   types: ProductType[];
   source: DataSource;
-  issues?: { scope: "images" | "attributes" | "variants"; message: string }[];
+  issues?: {
+    scope: "images" | "attributes" | "variants" | "brands";
+    message: string;
+  }[];
+  brands?: { id: string; name: string }[];
+  pagination?: { page: number; pageSize: number; count: number; pages: number };
 };
+export const productHref = (product: Product) =>
+  `/products/${product.source === "api" ? product.id : product.slug}`;
 export type CartLine = {
   productId: string;
   variantId: string | null;

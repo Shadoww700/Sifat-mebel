@@ -16,15 +16,18 @@ export function AttributeSetup({
   variantMode?: boolean;
 }) {
   const inputId = useId();
-  const query = useAdminData([
-    "attributes",
-    "product-types",
-    "product-type-attributes",
-    "products",
-    "product-variants",
-    "product-attribute-values",
-    "variant-attribute-values",
-  ]);
+  const query = useAdminData(
+    [
+      "attributes",
+      "product-types",
+      "product-type-attributes",
+      "products",
+      "product-variants",
+      "product-attribute-values",
+      "variant-attribute-values",
+    ],
+    { productId: product.id },
+  );
   const [open, setOpen] = useState(false);
   const [stage, setStage] = useState<Stage>("pick");
   const [attributeId, setAttributeId] = useState("");

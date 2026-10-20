@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   resources,
@@ -15,6 +16,7 @@ import { Icon } from "@/components/store/icons";
 import { useAdmin } from "./admin-shell";
 import { AdminHeading, DataState, fieldLabel, useAdminData } from "./data";
 import { ResourceForm } from "./resource-form";
+import { Pagination } from "@/components/store/pagination";
 
 function display(
   row: AdminRow,
@@ -51,12 +53,23 @@ export function ResourceManager({
   productId?: number;
 }) {
   const config = resources[resource];
-  const query = useAdminData([
-    resource,
-    ...resourceDependencies(resource),
-    ...(productId ? (["products", "product-variants"] as ResourceKey[]) : []),
-  ]);
-  const { adapter, run, source } = useAdmin();
+  const { adapter, run, source, user } = useAdmin();
+  const client = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [submittedSearch, setSubmittedSearch] = useState("");
+  const paginated = source === "api" && resource === "products";
+  const query = useAdminData(
+    [
+      resource,
+      ...resourceDependencies(resource),
+      ...(productId ? (["products", "product-variants"] as ResourceKey[]) : []),
+    ],
+    {
+      page: paginated ? page : undefined,
+      search: paginated ? submittedSearch : undefined,
+      productId,
+    },
+  );
   const [search, setSearch] = useState("");
   const [editor, setEditor] = useState<AdminRow | "create" | null>(null);
   const [editorBusy, setEditorBusy] = useState(false);
@@ -87,11 +100,12 @@ export function ResourceManager({
             (variant) => variant.id === row.variant,
           ))) &&
       (!variantFilter || row.variant === Number(variantFilter)) &&
-      config.columns
-        .map((field) => display(row, field, resource, data))
-        .join(" ")
-        .toLocaleLowerCase("ru")
-        .includes(search.toLocaleLowerCase("ru")),
+      (paginated ||
+        config.columns
+          .map((field) => display(row, field, resource, data))
+          .join(" ")
+          .toLocaleLowerCase("ru")
+          .includes(search.toLocaleLowerCase("ru"))),
   );
   const remove = async () => {
     if (!deleting || lock.current) return;
@@ -171,14 +185,37 @@ export function ResourceManager({
       )}
       <div className="a-toolbar">
         <label>
-          Поиск в загруженных записях
+          {paginated
+            ? "Поиск товаров через API"
+            : "Поиск в загруженных записях"}
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Название, артикул, значение…"
+            placeholder={
+              paginated
+                ? "Название, бренд или тип…"
+                : "Название, артикул, значение…"
+            }
+            onKeyDown={(event) => {
+              if (paginated && event.key === "Enter") {
+                setSubmittedSearch(search);
+                setPage(1);
+              }
+            }}
           />
         </label>
+        {paginated && (
+          <button
+            className="s-button"
+            onClick={() => {
+              setSubmittedSearch(search);
+              setPage(1);
+            }}
+          >
+            Найти
+          </button>
+        )}
         {resource === "stock-movements" && (
           <label>
             Вариант
@@ -202,7 +239,10 @@ export function ResourceManager({
         >
           Обновить
         </button>
-        <span role="status">Записей: {rows.length}</span>
+        <span role="status">
+          Записей:{" "}
+          {paginated ? query.data.productPagination?.count : rows.length}
+        </span>
       </div>
       <p className="a-success" role="status">
         {notice}
@@ -250,6 +290,19 @@ export function ResourceManager({
                         <Link
                           className="s-text-button"
                           href={`/admin/products/${row.id}`}
+                          prefetch={false}
+                          onClick={() =>
+                            client.setQueryData(
+                              [
+                                "admin-data",
+                                source,
+                                user.id,
+                                "product",
+                                row.id,
+                              ],
+                              row,
+                            )
+                          }
                           aria-label={`Карточка управления: ${rowTitle(row)}`}
                         >
                           Открыть товар
@@ -290,6 +343,13 @@ export function ResourceManager({
               : "Создайте первую запись или измените условия поиска."}
           </p>
         </div>
+      )}
+      {paginated && query.data.productPagination && (
+        <Pagination
+          page={page}
+          pages={query.data.productPagination.pages}
+          onPage={setPage}
+        />
       )}
       <Drawer
         open={editor !== null}

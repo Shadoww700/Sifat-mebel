@@ -11,7 +11,7 @@ import { CatalogStatus } from "@/components/store/catalog-status";
 import { Icon } from "@/components/store/icons";
 
 export default async function HomePage() {
-  const catalog = await getCatalog();
+  const catalog = await getCatalog({ pageSize: 4, includeBrands: false });
   return (
     <>
       <section className="s-hero s-container">

@@ -346,11 +346,13 @@
     flex-shrink: 0;
   }
   .store:not(.admin) .s-sort {
-    gap: 6px;
+    gap: 0;
+    min-width: 0;
+    font-size: 0;
   }
   .store:not(.admin) .s-sort select {
     font-size: 12px;
-    max-width: 160px;
+    max-width: min(160px, 45vw);
   }
   .store:not(.admin) .s-result-count {
     display: none;

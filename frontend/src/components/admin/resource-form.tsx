@@ -1,5 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { ProductLookup } from "./product-lookup";
 import { ApiError } from "@/lib/api/client";
 import {
   resources,
@@ -19,7 +21,7 @@ import { useAdmin } from "./admin-shell";
 export function ResourceForm({
   resource,
   row,
-  data,
+  data: suppliedData,
   onSaved,
   onBusyChange,
   initialValues,
@@ -33,11 +35,40 @@ export function ResourceForm({
   initialValues?: AdminRow;
   lockedFields?: string[];
 }) {
-  const { adapter, run } = useAdmin();
+  const { adapter, run, source, user } = useAdmin();
   const [draft, setDraft] = useState(() =>
     initialDraft(resource, row ?? initialValues),
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [picked, setPicked] = useState<AdminRow[]>([]);
+  const productRef = resources[resource].fields.some(
+    (f) => f.ref === "products",
+  );
+  const selected = useQuery({
+    queryKey: ["admin-data", source, user.id, "product", Number(draft.product)],
+    enabled:
+      source === "api" &&
+      productRef &&
+      Number(draft.product) > 0 &&
+      ![...(suppliedData.products ?? []), ...picked].some(
+        (p) => p.id === Number(draft.product),
+      ),
+    queryFn: () => adapter.product!(Number(draft.product)),
+    retry: false,
+    staleTime: 30_000,
+  });
+  const data = {
+    ...suppliedData,
+    products: [
+      ...new Map(
+        [
+          ...(suppliedData.products ?? []),
+          ...picked,
+          ...(selected.data ? [selected.data] : []),
+        ].map((p) => [p.id, p]),
+      ).values(),
+    ],
+  };
   const [pending, setPending] = useState(false);
   const locked = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -129,6 +160,22 @@ export function ResourceForm({
                 {field.label}
                 {required ? " *" : ""}
               </label>
+              {field.ref === "products" &&
+                source === "api" &&
+                !lockedFields.includes(field.key) && (
+                  <ProductLookup
+                    onPick={(row) => {
+                      setPicked((old) => [
+                        ...old.filter((p) => p.id !== row.id),
+                        row,
+                      ]);
+                      set(String(row.id));
+                    }}
+                  />
+                )}
+              {field.ref === "products" && selected.isError && (
+                <p role="alert">{selected.error.message}</p>
+              )}
               {field.type === "boolean" ? (
                 <input
                   {...common}

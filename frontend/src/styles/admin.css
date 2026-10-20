@@ -524,6 +524,9 @@
 .a-menu-button {
   display: none;
 }
+.a-mobile-section {
+  display: none;
+}
 .admin .s-drawer {
   width: min(620px, 100vw);
 }
@@ -549,6 +552,24 @@
   }
 }
 @media (max-width: 1023px) {
+  .a-mobile-section {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 24px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .a-mobile-section select {
+    width: 100%;
+    min-height: 48px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--s-border);
+    border-radius: var(--s-radius);
+    background: var(--s-paper);
+    color: var(--s-ink);
+    font: 600 16px/1.5 var(--s-ui);
+  }
   .a-sidebar {
     display: none;
   }

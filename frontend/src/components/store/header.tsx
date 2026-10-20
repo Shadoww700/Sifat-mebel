@@ -28,7 +28,7 @@ export function StoreHeader({ demo }: { demo: boolean }) {
             ? "Избранное: недоступно в Demo"
             : "Избранное: ошибка загрузки";
   const links = [
-    { href: "/catalog", name: "Коллекция" },
+    { href: "/catalog", name: "Каталог" },
     { href: "/categories", name: "Категории" },
     { href: "/contact", name: "Контакты" },
   ];
@@ -140,7 +140,7 @@ export function StoreHeader({ demo }: { demo: boolean }) {
       </Drawer>
       <nav className="s-mobile-bar" aria-label="Быстрая навигация">
         {[
-          { href: "/catalog", title: "Коллекция", icon: "menu" as const },
+          { href: "/catalog", title: "Каталог", icon: "menu" as const },
           { href: "/favorites", title: "Избранное", icon: "heart" as const },
           { href: "/contact", title: "Контакты", icon: "phone" as const },
           { href: "/account", title: "Профиль", icon: "user" as const },

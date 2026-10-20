@@ -1,15 +1,59 @@
 "use client";
 import type { Product } from "@/lib/commerce/models";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pagination } from "./pagination";
 import { favoriteKey, useFavorites } from "@/lib/commerce/favorites";
 import { ProductCard } from "./product-card";
 import { EmptyState, SectionHeading } from "./primitives";
 import { ProductSkeletons } from "./primitives";
 import { useFavoriteCollection } from "@/lib/commerce/favorites-provider";
-export function Favorites({ products }: { products: Product[] }) {
+export function Favorites() {
   const favorites = useFavorites();
-  const saved = products.filter((p) => favorites.includes(favoriteKey(p)));
   const collection = useFavoriteCollection();
-  const unavailable = collection.rows.filter(
+  const client = useQueryClient();
+  const [page, setPage] = useState(1);
+  const pages = Math.max(1, Math.ceil(collection.rows.length / 20));
+  const currentPage = Math.min(page, pages);
+  const visible = collection.rows.slice(
+    (currentPage - 1) * 20,
+    currentPage * 20,
+  );
+  const ids = visible.map((row) => row.product);
+  const details = useQuery({
+    queryKey: ["favorite-product-details", ids],
+    enabled: collection.status === "ready" && ids.length > 0,
+    retry: false,
+    queryFn: async () => {
+      const products: Product[] = [];
+      // Favorites API returns IDs only. Hydrate this page, at most four at once;
+      // reuse public detail cache, never scan the products collection.
+      for (let index = 0; index < ids.length; index += 4) {
+        const batch = await Promise.all(
+          ids.slice(index, index + 4).map((id) =>
+            client.fetchQuery({
+              queryKey: ["public-product", id],
+              staleTime: 30_000,
+              queryFn: async (): Promise<Product | null> => {
+                const response = await fetch(`/api/store/products/${id}`);
+                if (response.status === 404) return null;
+                if (!response.ok)
+                  throw new Error(
+                    "Не удалось загрузить сохранённые товары. Повторите попытку.",
+                  );
+                return response.json();
+              },
+            }),
+          ),
+        );
+        products.push(...batch.filter((p): p is Product => p !== null));
+      }
+      return products;
+    },
+  });
+  const products = details.data ?? [];
+  const saved = products.filter((p) => favorites.includes(favoriteKey(p)));
+  const unavailable = visible.filter(
     (row) =>
       !products.some(
         (product) =>
@@ -23,7 +67,8 @@ export function Favorites({ products }: { products: Product[] }) {
         title="Избранное"
         text={"Ваша подборка сохраняется в аккаунте через API магазина."}
       />
-      {collection.status === "loading" ? (
+      {collection.status === "loading" ||
+      (collection.status === "ready" && ids.length > 0 && details.isPending) ? (
         <ProductSkeletons />
       ) : collection.status === "guest" ? (
         <EmptyState
@@ -47,10 +92,19 @@ export function Favorites({ products }: { products: Product[] }) {
             Повторить
           </button>
         </EmptyState>
+      ) : details.isError && collection.status === "ready" && ids.length > 0 ? (
+        <EmptyState
+          title="Не удалось загрузить товары"
+          text={details.error.message}
+        >
+          <button className="s-button" onClick={() => void details.refetch()}>
+            Повторить
+          </button>
+        </EmptyState>
       ) : saved.length || unavailable.length ? (
         <>
           <p className="s-muted" role="status">
-            Предметов в подборке: {saved.length + unavailable.length}
+            Предметов в подборке: {collection.rows.length}
           </p>
           <div className="s-product-grid">
             {saved.map((p) => (
@@ -74,6 +128,7 @@ export function Favorites({ products }: { products: Product[] }) {
               </button>
             </div>
           ))}
+          <Pagination page={currentPage} pages={pages} onPage={setPage} />
         </>
       ) : (
         <EmptyState

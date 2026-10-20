@@ -1,22 +1,75 @@
 "use client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { resources, type ResourceKey } from "@/lib/admin/resources";
 import type { ReferenceData } from "@/lib/admin/forms";
 import { useAdmin } from "./admin-shell";
+import type { AdminProductPage } from "@/lib/admin/api";
 
-export function useAdminData(keys: ResourceKey[]) {
+export function useAdminData(
+  keys: ResourceKey[],
+  options: { page?: number; search?: string; productId?: number } = {},
+) {
   const { source, user, adapter } = useAdmin();
+  const client = useQueryClient();
   const stableKeys = [...new Set(keys)].sort();
-  return useQuery({
-    queryKey: ["admin-data", source, user.id, ...stableKeys],
+  const query = useQuery({
+    queryKey: ["admin-data", source, user.id, ...stableKeys, options],
     retry: false,
-    queryFn: async (): Promise<ReferenceData> =>
-      Object.fromEntries(
+    queryFn: async (): Promise<
+      ReferenceData & { productPagination?: AdminProductPage }
+    > => {
+      let productPagination: AdminProductPage | undefined;
+      const data = Object.fromEntries(
         await Promise.all(
-          stableKeys.map(async (key) => [key, await adapter.list(key)]),
+          stableKeys.map(async (key) => {
+            if (key === "products" && source === "api") {
+              if (options.productId && adapter.product)
+                return [
+                  key,
+                  [
+                    await client.fetchQuery({
+                      queryKey: [
+                        "admin-data",
+                        source,
+                        user.id,
+                        "product",
+                        options.productId,
+                      ],
+                      queryFn: () => adapter.product!(options.productId!),
+                      staleTime: 30_000,
+                    }),
+                  ],
+                ];
+              productPagination = await adapter.productPage!(
+                options.page ?? 1,
+                options.search,
+              );
+              return [key, productPagination.rows];
+            }
+            return [
+              key,
+              await client.fetchQuery({
+                queryKey: ["admin-data", source, user.id, "resource", key],
+                queryFn: () => adapter.list(key),
+                staleTime: 30_000,
+              }),
+            ];
+          }),
         ),
-      ),
+      );
+      return { ...data, productPagination };
+    },
   });
+  return {
+    ...query,
+    refetch: async () => {
+      await client.invalidateQueries({
+        queryKey: ["admin-data", source, user.id],
+        refetchType: "none",
+      });
+      return query.refetch();
+    },
+  };
 }
 export function AdminHeading({
   title,

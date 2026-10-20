@@ -32,7 +32,13 @@ export function AdminDashboard() {
           {keys.map((key) => (
             <Link key={key} href={`/admin/${key}`}>
               <span>{resources[key].title}</span>
-              <strong>{query.data[key]?.length ?? 0}</strong>
+              <strong>
+                {key === "products"
+                  ? (query.data.productPagination?.count ??
+                    query.data[key]?.length ??
+                    0)
+                  : (query.data[key]?.length ?? 0)}
+              </strong>
               <Icon name="arrow" />
             </Link>
           ))}
