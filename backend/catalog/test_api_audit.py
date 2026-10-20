@@ -355,7 +355,7 @@ class FavoriteAuditTests(CatalogFixtureMixin, APITestCase):
         favorite = models.Favorite.objects.create(user=self.customer, product=self.product)
         self.authenticate(self.admin)
         for method in ("get", "delete"):
-            self.assertEqual(getattr(self.client, method)(API + f"favorites/{favorite.pk}/").status_code, 403)
+            self.assertEqual(getattr(self.client, method)(API + f"favorites/{favorite.pk}/").status_code, 404)
         self.assertTrue(models.Favorite.objects.filter(pk=favorite.pk).exists())
 
     def test_missing_bad_and_nonexistent_product_rejected_without_rows(self):

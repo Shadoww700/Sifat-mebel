@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 
 from accounts.permissions import IsAdminOnly, IsAdminOrReadonly, IsOwner, is_admin
 from accounts.serializers import ChangePasswordSerializer
+from catalog.views import ProductListCreateAPIView, StockAdjustAPIView, StockMovementListAPIView
 
 
 class PermissionUnitAuditTests(SimpleTestCase):
@@ -23,6 +24,9 @@ class PermissionUnitAuditTests(SimpleTestCase):
                 request = SimpleNamespace(method="POST", user=user)
                 self.assertEqual(IsAdminOnly().has_permission(request, None), expected)
                 self.assertEqual(IsAdminOrReadonly().has_permission(request, None), expected)
+                for view_class in (ProductListCreateAPIView, StockAdjustAPIView, StockMovementListAPIView):
+                    view = view_class()
+                    self.assertEqual(all(p.has_permission(request, view) for p in view.get_permissions()), expected)
 
     def test_safe_methods_are_public_and_unsafe_methods_reject_anonymous(self):
         for method in ("GET", "HEAD", "OPTIONS"):

@@ -166,6 +166,22 @@ class ProductMiniSerializer(serializers.ModelSerializer):
 
 
 
+class ProductImageQuerySerializer(serializers.Serializer):
+    # A page contains at most 100 products. Reject malformed/unbounded batches;
+    # invalid input must not silently fall back to the full image collection.
+    product_id = serializers.IntegerField(min_value=1, max_value=9223372036854775807, required=False)
+    product_ids = serializers.CharField(max_length=2100, required=False)
+
+    def validate_product_ids(self, value):
+        parts = value.split(',')
+        if len(parts) > 100 or any(
+            not part.isascii() or not part.isdecimal() or
+            not 0 < int(part) <= 9223372036854775807 for part in parts
+        ):
+            raise serializers.ValidationError('Expected 1–100 positive product IDs separated by commas.')
+        return list(dict.fromkeys(int(part) for part in parts))
+
+
 class ProductImageSerializer(serializers.ModelSerializer):
     product_info = ProductMiniSerializer(
         source="product",
@@ -538,6 +554,10 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             'attribute_values',
             'variants',
         ]
+
+class StockMovementQuerySerializer(serializers.Serializer):
+    variant_id = serializers.IntegerField(min_value=1, max_value=9223372036854775807)
+
 
 class StockAdjustmentSerializer(serializers.Serializer):
     variant_id = serializers.IntegerField(min_value=1)

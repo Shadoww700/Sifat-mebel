@@ -1,12 +1,11 @@
 from rest_framework import generics
-from rest_framework.permissions import AllowAny, IsAuthenticated,IsAdminUser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from accounts.permissions import (
     IsAdminOrReadonly,
     IsAdminOnly,
     is_admin,
     IsOwner
 )
-from accounts.models import UserRole
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -17,13 +16,14 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import ProductFilter
 from .pagination import ProductPagination
+from .visibility import public_product
 
 
 class CategoryListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = serializers.CategorySerializer
 
     def get_queryset(self):
-        if self.request.method == 'GET':
+        if not is_admin(self.request.user):
             return models.Category.objects.active().ordered()
         return models.Category.objects.ordered()
 
@@ -38,7 +38,7 @@ class CategoryDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminOrReadonly]
 
     def get_queryset(self):
-        if self.request.method == 'GET':
+        if not is_admin(self.request.user):
             return models.Category.objects.active()
         return models.Category.objects.all()
 
@@ -74,7 +74,7 @@ class ProductTypeListCreateAPIView(generics.ListCreateAPIView):
         if is_admin(self.request.user):
             return qs  
                 
-        return qs.filter(is_active=True)
+        return qs.filter(is_active=True, category__is_active=True)
 
 
 class ProductTypeDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
@@ -86,7 +86,7 @@ class ProductTypeDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         if is_admin(self.request.user):
             return qs  
         
-        return qs.filter(is_active=True)
+        return qs.filter(is_active=True, category__is_active=True)
 
 
 class ProductListCreateAPIView(generics.ListCreateAPIView):
@@ -115,15 +115,7 @@ class ProductListCreateAPIView(generics.ListCreateAPIView):
         qs = models.Product.objects.select_related('brand', 'product_type__category')
 
         if not is_admin(self.request.user):
-            qs = qs.filter(
-                is_active=True,
-                brand__is_active=True,
-                product_type__category__is_active=True,
-                product_type__is_active=True,
-                status__in=[
-                    models.ProductStatus.ACTIVE,
-                    models.ProductStatus.OUT_OF_STOCK
-                ])
+            qs = qs.filter(public_product())
         return qs 
 
 
@@ -141,23 +133,18 @@ class ProductDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
             'product_type__category'
             ).prefetch_related(
                 'images',
-                'attribute_values',
+                Prefetch('attribute_values', queryset=models.ProductAttributeValue.objects.select_related('attribute')),
                 Prefetch(
                 'variants',
-                queryset=variant_qs.prefetch_related('attribute_values')
+                queryset=variant_qs.prefetch_related(Prefetch(
+                    'attribute_values',
+                    queryset=models.VariantAttributeValue.objects.select_related('attribute'),
+                ))
                 ))
         if is_admin(self.request.user):
             return qs
         
-        return qs.filter(
-            is_active=True,
-            brand__is_active=True,
-            product_type__category__is_active=True,
-            product_type__is_active=True,
-            status__in=[
-                models.ProductStatus.ACTIVE,
-                models.ProductStatus.OUT_OF_STOCK
-            ])
+        return qs.filter(public_product())
     def get_serializer_class(self):
         if self.request.method == 'GET':
             return serializers.ProductDetailSerializer
@@ -174,14 +161,16 @@ class ProductImageListCreateAPIView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         qs = models.ProductImage.objects.select_related('product')
-        if is_admin(self.request.user):
-            return qs
-        return qs.filter(
-            product__is_active=True,
-            product__status__in=[
-                models.ProductStatus.ACTIVE,
-                models.ProductStatus.OUT_OF_STOCK
-            ])
+        if not is_admin(self.request.user):
+            qs = qs.filter(public_product('product__'))
+        # Treat an explicitly empty filter as invalid, not an omitted HTML field.
+        query = serializers.ProductImageQuerySerializer(data=self.request.query_params.dict())
+        query.is_valid(raise_exception=True)
+        if 'product_ids' in query.validated_data:
+            qs = qs.filter(product_id__in=query.validated_data['product_ids'])
+        if 'product_id' in query.validated_data:
+            qs = qs.filter(product_id=query.validated_data['product_id'])
+        return qs.order_by('product_id', '-is_primary', 'sort_order', 'id')
 
 
 class ProductImageDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
@@ -193,12 +182,7 @@ class ProductImageDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         if is_admin(self.request.user):
             return qs
         
-        return qs.filter(
-            product__is_active=True,
-            product__status__in=[
-                models.ProductStatus.ACTIVE,
-                models.ProductStatus.OUT_OF_STOCK
-            ])
+        return qs.filter(public_product('product__'))
 
 
 class AttributeListCreateAPIView(generics.ListCreateAPIView):
@@ -225,7 +209,8 @@ class ProductTypeAttributeListCreateAPIView(generics.ListCreateAPIView):
         if is_admin(self.request.user):
             return qs
         return qs.filter(
-            product_type__is_active=True
+            product_type__is_active=True,
+            product_type__category__is_active=True,
         )
 
 
@@ -241,7 +226,8 @@ class ProductTypeAttributeDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         if is_admin(self.request.user):
             return qs
         return qs.filter(
-            product_type__is_active=True
+            product_type__is_active=True,
+            product_type__category__is_active=True,
         )
 
 
@@ -256,12 +242,7 @@ class ProductAttributeValueListCreateAPIView(generics.ListCreateAPIView):
 
         if is_admin(self.request.user):
             return qs
-        return qs.filter(
-            product__is_active=True,
-            product__status__in=[
-                models.ProductStatus.ACTIVE,
-                models.ProductStatus.OUT_OF_STOCK
-            ])
+        return qs.filter(public_product('product__'))
 
 
 class ProductAttributeValueDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
@@ -275,12 +256,7 @@ class ProductAttributeValueDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
 
         if is_admin(self.request.user):
             return qs
-        return qs.filter(
-            product__is_active=True,
-            product__status__in=[
-                models.ProductStatus.ACTIVE,
-                models.ProductStatus.OUT_OF_STOCK
-            ])
+        return qs.filter(public_product('product__'))
 
 
 class ProductVariantListCreateAPIView(generics.ListCreateAPIView):
@@ -292,16 +268,7 @@ class ProductVariantListCreateAPIView(generics.ListCreateAPIView):
         if is_admin(self.request.user):
             return qs
         
-        return qs.filter(
-            is_active=True,
-            product__is_active=True,
-            product__brand__is_active=True,
-            product__product_type__category__is_active=True,
-            product__product_type__is_active=True,
-            product__status__in=[
-                models.ProductStatus.ACTIVE,
-                models.ProductStatus.OUT_OF_STOCK,
-            ])
+        return qs.filter(public_product('product__'), is_active=True)
 
 class ProductVariantDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = serializers.ProductVariantSerializer
@@ -312,16 +279,7 @@ class ProductVariantDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         if is_admin(self.request.user):
             return qs
             
-        return qs.filter(
-            is_active=True,
-            product__is_active=True,
-            product__brand__is_active=True,
-            product__product_type__category__is_active=True,
-            product__product_type__is_active=True,
-            product__status__in=[
-                models.ProductStatus.ACTIVE,
-                models.ProductStatus.OUT_OF_STOCK,
-            ])
+        return qs.filter(public_product('product__'), is_active=True)
     def perform_destroy(self, instance):
         instance.is_active=False
         instance.save(update_fields=['is_active', 'updated_at'])
@@ -337,13 +295,7 @@ class VariantAttributeValueListCreateAPIView(generics.ListCreateAPIView):
             )
         if is_admin(self.request.user):
             return qs
-        return qs.filter(
-                variant__is_active=True,
-                variant__product__is_active=True,
-                variant__product__status__in=[
-                    models.ProductStatus.ACTIVE,
-                    models.ProductStatus.OUT_OF_STOCK
-                ])
+        return qs.filter(public_product('variant__product__'), variant__is_active=True)
 
 
 class VariantAttributeValueDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
@@ -356,17 +308,12 @@ class VariantAttributeValueDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
             )
         if is_admin(self.request.user):
             return qs
-        return qs.filter(
-            variant__is_active=True,
-            variant__product__is_active=True,
-            variant__product__status__in=[
-                models.ProductStatus.ACTIVE,
-                models.ProductStatus.OUT_OF_STOCK
-            ])
+        return qs.filter(public_product('variant__product__'), variant__is_active=True)
 
 
 class StockAdjustAPIView(APIView):
-    permission_classes = [IsAdminUser]
+    # Use the same existing project policy as products and stock history.
+    permission_classes = [IsAdminOnly]
 
     def post(self, request):
         serializer = serializers.StockAdjustmentSerializer(
@@ -394,8 +341,10 @@ class StockMovementListAPIView(generics.ListAPIView):
 
         variant_id = self.request.query_params.get("variant_id")
 
-        if variant_id:
-            qs = qs.filter(variant_id=variant_id)
+        if variant_id is not None:
+            query = serializers.StockMovementQuerySerializer(data={'variant_id': variant_id})
+            query.is_valid(raise_exception=True)
+            qs = qs.filter(variant_id=query.validated_data['variant_id'])
 
         return qs
 
@@ -430,9 +379,6 @@ class FavoriteDeleteAPIView(generics.RetrieveDestroyAPIView):
     permission_classes = [IsOwner, IsAuthenticated]
 
     def get_queryset(self):
-        qs = models.Favorite.objects.all()
-        if is_admin(self.request.user):
-            return qs
-        return qs.filter(
+        return models.Favorite.objects.filter(
             user=self.request.user
         )
